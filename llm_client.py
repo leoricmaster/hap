@@ -2,12 +2,18 @@ import os
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
 from dotenv import load_dotenv
-from typing import List, Dict, Optional
+from typing import List, Optional
 
 load_dotenv()
 
 class HelloAgentsLLM:
-    def __init__(self, model: Optional[str] = None, api_key: Optional[str] = None, base_url: Optional[str] = None, timeout: Optional[int] = None):
+    def __init__(
+            self,
+            model: Optional[str] = None,
+            api_key: Optional[str] = None,
+            base_url: Optional[str] = None,
+            timeout: Optional[int] = None
+        ):
         self.model = model or os.getenv("LLM_MODEL_ID")
         api_key = api_key or os.getenv("LLM_API_KEY")
         base_url = base_url or os.getenv("LLM_BASE_URL")

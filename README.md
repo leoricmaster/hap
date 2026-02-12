@@ -2,7 +2,7 @@
 
 ## 搭建练习环境
 
-安装依赖库
+1 安装依赖库
 
 ```bash
 virtualenv hap
@@ -12,7 +12,6 @@ source ~/hap/bin/activate
 pip install openai python-dotenv
 ```
 
-配置 API 密钥
+2 配置环境变量
 
-https://api.bianxie.ai/
-
+在项目根目录下新建 .env 文件
