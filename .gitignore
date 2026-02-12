@@ -1,0 +1,12 @@
+# MarsCode AI assistant configuration
+.marscode/
+
+# Environment variables
+.env
+
+# VSCode - ignore user-specific settings but keep project settings
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
