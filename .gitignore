@@ -2,7 +2,7 @@
 .marscode/
 
 # Environment variables
-.env
+.env.example
 
 # VSCode - ignore user-specific settings but keep project settings
 .vscode/*
