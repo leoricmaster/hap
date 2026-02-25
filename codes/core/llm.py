@@ -41,14 +41,14 @@ class HelloAgentsLLM:
 
         self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
 
-    def think(self,messages: List[ChatCompletionMessageParam], **kwargs) -> Iterator[str]:
+    def think(self, messages: List[ChatCompletionMessageParam], **kwargs) -> Iterator[str]:
         """
         调用大语言模型进行思考，并返回流式响应。
         这是主要的调用方法，默认使用流式响应以获得更好的用户体验。
 
         Args:
             messages: 消息列表
-            temperature: 温度参数，如果未提供则使用初始化时的值
+            kwargs: 其他参数，如 temperature, max_tokens 等
 
         Yields:
             str: 流式响应的文本片段
@@ -69,9 +69,7 @@ class HelloAgentsLLM:
             for chunk in response:
                 content = chunk.choices[0].delta.content or ""
                 if content:
-                    print(content, end="", flush=True)
                     yield content
-            print()  # 在流式输出结束后换行
 
         except Exception as e:
             print(f"❌ 调用 LLM API 时发生错误: {e}")
@@ -105,7 +103,9 @@ class HelloAgentsLLM:
 
 if __name__ == '__main__':
     try:
+        print("正在初始化 LLM 客户端...")
         llmClient = HelloAgentsLLM()
+        print("LLM 客户端初始化成功")
 
         exampleMessages: List[ChatCompletionMessageParam] = [
             {"role": "system", "content": "You are a helpful assistant that writes Python code."},
@@ -113,7 +113,13 @@ if __name__ == '__main__':
         ]
         
         print("--- 调用LLM ---")
-        responseText = llmClient.think(exampleMessages)
+        for chunk in llmClient.think(exampleMessages):
+            print(chunk, end="")
+        print("\n--- LLM 响应结束 ---")
 
     except ValueError as e:
-        print(e)
+        print(f"配置错误: {e}")
+    except Exception as e:
+        print(f"发生错误: {e}")
+        import traceback
+        traceback.print_exc()

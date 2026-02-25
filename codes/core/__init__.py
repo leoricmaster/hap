@@ -1,7 +1,7 @@
 """核心框架模块"""
 
-from .llm import HelloAgentsLLM
-from .exceptions import HelloAgentsException
+from codes.core.llm import HelloAgentsLLM
+from codes.core.exceptions import HelloAgentsException
 
 __all__ = [
     "HelloAgentsLLM", 

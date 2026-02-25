@@ -1,6 +1,7 @@
 # 核心组件
-from .core.llm import HelloAgentsLLM
-from .core.exceptions import HelloAgentsException
+
+from codes.core.llm import HelloAgentsLLM
+from codes.core.exceptions import HelloAgentsException
 
 # Agent实现
 
@@ -18,4 +19,3 @@ __all__ = [
 
     # 工具系统
 ]
-
