@@ -41,7 +41,7 @@ class HelloAgentsLLM:
 
         self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
 
-    def think(self, messages: List[ChatCompletionMessageParam], **kwargs) -> Iterator[str]:
+    def think(self, messages: list[dict[str, str]], **kwargs) -> Iterator[str]:
         """
         调用大语言模型进行思考，并返回流式响应。
         这是主要的调用方法，默认使用流式响应以获得更好的用户体验。
@@ -56,8 +56,8 @@ class HelloAgentsLLM:
         assert self._model is not None
         print(f"🧠 正在调用 {self._model} 模型 ...")
         try:
-            response = self._client.chat.completions.create(
-                messages = messages,
+            response = self._client.chat.completions.create( # type: ignore[arg-type]
+                messages = messages, # type: ignore[arg-type]
                 model = self._model,
                 temperature = kwargs.get('temperature', self._temperature),
                 max_tokens = kwargs.get('max_tokens', self._max_tokens),
@@ -75,15 +75,15 @@ class HelloAgentsLLM:
             print(f"❌ 调用 LLM API 时发生错误: {e}")
             raise HelloAgentsException(f"LLM 调用失败: {str(e)}")
 
-    def invoke(self, messages: List[ChatCompletionMessageParam], **kwargs) -> str:
+    def invoke(self, messages: list[dict[str, str]], **kwargs) -> str:
         """
         非流式调用LLM，返回完整响应。
         适用于不需要流式输出的场景。
         """
         try:
             assert self._model is not None
-            response = self._client.chat.completions.create(
-                messages=messages,
+            response = self._client.chat.completions.create( # type: ignore[arg-type]
+                messages=messages, # type: ignore[arg-type]
                 model=self._model,
                 temperature=kwargs.get('temperature', self._temperature),
                 max_tokens=kwargs.get('max_tokens', self._max_tokens),
@@ -93,7 +93,7 @@ class HelloAgentsLLM:
         except Exception as e:
             raise HelloAgentsException(f"LLM 调用失败: {str(e)}")
 
-    def stream_invoke(self, messages: List[ChatCompletionMessageParam], **kwargs) -> Iterator[str]:
+    def stream_invoke(self, messages: list[dict[str, str]], **kwargs) -> Iterator[str]:
         """
         流式调用LLM的别名方法，与think方法功能相同。
         保持向后兼容性。
@@ -107,7 +107,7 @@ if __name__ == '__main__':
         llmClient = HelloAgentsLLM()
         print("LLM 客户端初始化成功")
 
-        exampleMessages: List[ChatCompletionMessageParam] = [
+        exampleMessages: list[dict[str, str]] = [
             {"role": "system", "content": "You are a helpful assistant that writes Python code."},
             {"role": "user", "content": "写一个快速排序算法"}
         ]
