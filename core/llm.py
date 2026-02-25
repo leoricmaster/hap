@@ -1,8 +1,7 @@
 import os
 from openai import OpenAI
-from openai.types.chat import ChatCompletionMessageParam
 from dotenv import load_dotenv
-from typing import List, Optional, Iterator
+from typing import Optional, Iterator
 from .exceptions import HelloAgentsException
 
 load_dotenv()
