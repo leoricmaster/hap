@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from codes.core.llm import HelloAgentsLLM
+from core.llm import HelloAgentsLLM
 
 
 class Memory:
@@ -138,8 +138,9 @@ class ReflectionAgent:
     def _get_llm_response(self, prompt: str) -> str:
         """一个辅助方法，用于调用LLM并获取完整的流式响应。"""
         messages = [{"role": "user", "content": prompt}]
-        # 确保能处理生成器可能返回None的情况
-        response_text = self.llm_client.think(messages=messages) or ""
+        # 处理生成器响应，将所有内容组合成字符串
+        response_generator = self.llm_client.think(messages=messages)
+        response_text = "".join(chunk for chunk in response_generator) if response_generator else ""
         return response_text
 
 if __name__ == '__main__':
@@ -153,4 +154,3 @@ if __name__ == '__main__':
     # 3. 定义任务并运行智能体
     task = "编写一个Python函数，找出1到n之间所有的素数 (prime numbers)。"
     agent.run(task)
-
