@@ -1,5 +1,5 @@
 import os
-from typing import Optional, Any
+from typing import Optional, Any, List, Dict
 from ..base import Tool, ToolParameter
 
 
@@ -11,7 +11,7 @@ class SearchTool(Tool):
         )
         self._serpapi_key = serpapi_key or os.getenv("SERPAPI_API_KEY")
 
-    def run(self, parameters: dict[str, Any]) -> str:
+    def run(self, parameters: Dict[str, Any]) -> str:
         """
         执行搜索
 
@@ -69,7 +69,7 @@ class SearchTool(Tool):
 
         return f"对不起，没有找到关于 '{query}' 的信息。"
 
-    def get_parameters(self) -> list[ToolParameter]:
+    def get_parameters(self) -> List[ToolParameter]:
         """获取工具参数定义"""
         return [
             ToolParameter(

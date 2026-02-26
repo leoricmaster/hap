@@ -11,52 +11,38 @@ class AsyncToolExecutor:
         self._registry = registry
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
 
-    async def execute_tool_async(self, tool_name: str, input_data: str) -> str:
+    async def execute_tool_async(self, tool_name: str, tool_params: Dict[str, Any]) -> str:
         """异步执行单个工具"""
-        loop = asyncio.get_event_loop()
-        
         def _execute():
-            return self._registry.execute_tool(tool_name, input_data)
-        
+            return self._registry.execute_tool(tool_name, tool_params)
+
+        loop = asyncio.get_event_loop()
         try:
             result = await loop.run_in_executor(self._executor, _execute)
             return result
         except Exception as e:
             return f"❌ 工具 '{tool_name}' 异步执行失败: {e}"
 
-    async def execute_tools_parallel(self, tasks: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+    async def execute_tools_parallel(self, tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         并行执行多个工具
         
         Args:
-            tasks: 任务列表，每个任务包含 tool_name 和 input_data
+            tasks: 任务列表，每个任务包含 tool_name: str 和 tool_params: dict
             
         Returns:
             执行结果列表，包含任务信息和结果
         """
         print(f"🚀 开始并行执行 {len(tasks)} 个工具任务")
-        
-        # 创建异步任务
-        async_tasks = []
-        for i, task in enumerate(tasks):
-            tool_name = task.get("tool_name")
-            input_data = task.get("input_data", "")
-            
-            if not tool_name:
-                continue
-                
-            print(f"📝 创建任务 {i+1}: {tool_name}")
-            async_task = self.execute_tool_async(tool_name, input_data)
-            async_tasks.append((i, task, async_task))
-        
-        async def run_task(i: int, task: Dict[str, str], coro):
+
+        async def run_task(i: int, task: dict[str, str], coro):
             try:
                 result = await coro
                 print(f"✅ 任务 {i+1} 完成: {task['tool_name']}")
                 return {
                     "task_id": i,
                     "tool_name": task["tool_name"],
-                    "input_data": task["input_data"],
+                    "tool_params": task["tool_params"],
                     "result": result,
                     "status": "success"
                 }
@@ -65,10 +51,24 @@ class AsyncToolExecutor:
                 return {
                     "task_id": i,
                     "tool_name": task["tool_name"],
-                    "input_data": task["input_data"],
+                    "tool_params": task["tool_params"],
                     "result": str(e),
                     "status": "error"
                 }
+
+        # 创建异步任务
+        async_tasks = []
+        for i, task in enumerate(tasks):
+            tool_name = task.get("tool_name")
+            tool_params = task.get("tool_params", {})
+            
+            if not tool_name:
+                print(f"⚠️ 任务 {i+1} 缺少 'tool_name'，跳过")
+                continue
+                
+            print(f"📝 创建任务 {i+1}: {tool_name}")
+            async_task = self.execute_tool_async(tool_name, tool_params)
+            async_tasks.append((i, task, async_task))
 
         results = await asyncio.gather(*[
             run_task(i, task, coro) for i, task, coro in async_tasks
@@ -78,20 +78,20 @@ class AsyncToolExecutor:
         print(f"🎉 并行执行完成，成功: {sum(1 for r in results if r['status'] == 'success')}/{len(results)}")
         return results
 
-    async def execute_tools_batch(self, tool_name: str, input_list: List[str]) -> List[Dict[str, Any]]:
+    async def execute_tools_batch(self, tool_name: str, input_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         批量执行同一个工具
         
         Args:
             tool_name: 工具名称
-            input_list: 输入数据列表
+            input_list: 输入参数字典列表
             
         Returns:
             执行结果列表
         """
         tasks = [
-            {"tool_name": tool_name, "input_data": input_data}
-            for input_data in input_list
+            {"tool_name": tool_name, "tool_params": tool_params}
+            for tool_params in input_list
         ]
         return await self.execute_tools_parallel(tasks)
 
@@ -114,7 +114,7 @@ class AsyncToolExecutor:
 
 
 # 便捷函数
-async def run_parallel_tools(registry: ToolRegistry, tasks: List[Dict[str, str]], max_workers: int = 4) -> List[Dict[str, Any]]:
+async def run_parallel_tools(registry: ToolRegistry, tasks: List[Dict[str, Any]], max_workers: int = 4) -> List[Dict[str, Any]]:
     """
     便捷函数：并行执行多个工具
     
@@ -130,14 +130,14 @@ async def run_parallel_tools(registry: ToolRegistry, tasks: List[Dict[str, str]]
         return await executor.execute_tools_parallel(tasks)
 
 
-async def run_batch_tool(registry: ToolRegistry, tool_name: str, input_list: List[str], max_workers: int = 4) -> List[Dict[str, Any]]:
+async def run_batch_tool(registry: ToolRegistry, tool_name: str, input_list: List[Dict[str, Any]], max_workers: int = 4) -> List[Dict[str, Any]]:
     """
     便捷函数：批量执行同一个工具
     
     Args:
         registry: 工具注册表
         tool_name: 工具名称
-        input_list: 输入数据列表
+        input_list: 输入参数字典列表
         max_workers: 最大工作线程数
         
     Returns:
@@ -145,17 +145,6 @@ async def run_batch_tool(registry: ToolRegistry, tool_name: str, input_list: Lis
     """
     async with AsyncToolExecutor(registry, max_workers) as executor:
         return await executor.execute_tools_batch(tool_name, input_list)
-
-
-# 同步包装函数（为了兼容性）
-def run_parallel_tools_sync(registry: ToolRegistry, tasks: List[Dict[str, str]], max_workers: int = 4) -> List[Dict[str, Any]]:
-    """同步版本的并行工具执行"""
-    return asyncio.run(run_parallel_tools(registry, tasks, max_workers))
-
-
-def run_batch_tool_sync(registry: ToolRegistry, tool_name: str, input_list: List[str], max_workers: int = 4) -> List[Dict[str, Any]]:
-    """同步版本的批量工具执行"""
-    return asyncio.run(run_batch_tool(registry, tool_name, input_list, max_workers))
 
 
 # 示例函数
@@ -170,14 +159,15 @@ async def demo_parallel_execution():
                 name="slow_tool",
                 description=f"模拟耗时{delay}秒的工具"
             )
-            self.delay = delay
+            self._delay = delay
 
         def run(self, parameters: dict[str, Any]) -> str:
-            time.sleep(self.delay)
-            return f"完成（耗时{self.delay}秒）"
+            task_name = parameters.get("task_name")
+            time.sleep(self._delay)
+            return f"{task_name} 完成（耗时{self._delay}秒）"
 
-        def get_parameters(self) -> list[ToolParameter]:
-            return [ToolParameter(name="input", type="string", description="输入", required=True)]
+        def get_parameters(self) -> List[ToolParameter]:
+            return [ToolParameter(name="task_name", type="string", description="任务名称", required=True)]
 
     from .registry import ToolRegistry
 
@@ -186,10 +176,10 @@ async def demo_parallel_execution():
     registry.register_tool(slow_tool)
 
     tasks = [
-        {"tool_name": "slow_tool", "input_data": "任务1"},
-        {"tool_name": "slow_tool", "input_data": "任务2"},
-        {"tool_name": "slow_tool", "input_data": "任务3"},
-        {"tool_name": "slow_tool", "input_data": "任务4"},
+        {"tool_name": "slow_tool", "tool_params": {"task_name": "任务1"}},
+        {"tool_name": "slow_tool", "tool_params": {"task_name": "任务2"}},
+        {"tool_name": "slow_tool", "tool_params": {"task_name": "任务3"}},
+        {"tool_name": "slow_tool", "tool_params": {"task_name": "任务4"}},
     ]
 
     print("\n⏱️ 测试并行执行（4个任务，每个1秒）...")
@@ -200,7 +190,7 @@ async def demo_parallel_execution():
     print(f"\n⏱️ 测试串行执行（4个任务，每个1秒）...")
     start = time.time()
     for task in tasks:
-        registry.execute_tool(task["tool_name"], task["input_data"])
+        registry.execute_tool(task["tool_name"], task["tool_params"])
     serial_time = time.time() - start
 
     print("\n📊 执行时间对比:")
@@ -210,7 +200,7 @@ async def demo_parallel_execution():
 
     print("\n📋 并行执行结果:")
     for result in results:
-        print(f"   ✅ {result['input_data']} → {result['result']}")
+        print(f"   ✅ {result['tool_params']} → {result['result']}")
 
     return results
 
