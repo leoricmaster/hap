@@ -30,7 +30,21 @@ class ToolRegistry:
         else:
             print(f"⚠️ 工具 '{name}' 不存在。")
 
-    def execute_tool(self, name: str, input_params: Dict[str, Any]) -> str:
+    def get_tools_description(self) -> str:
+        """
+        获取所有可用工具的格式化描述字符串
+
+        Returns:
+            工具描述字符串，用于构建提示词
+        """
+        descriptions = []
+
+        for tool in self._tools.values():
+            descriptions.append(f"- {tool.name}: {tool.description}")
+
+        return "\n".join(descriptions) if descriptions else "暂无可用工具"
+
+    def execute_tool(self, tool_name: str, input_json: Dict[str, Any]) -> str:
         """
         执行工具
 
@@ -41,23 +55,19 @@ class ToolRegistry:
         Returns:
             工具执行结果
         """
-        if name in self._tools:
-            tool = self._tools[name]
+        if tool_name in self._tools:
+            tool = self._tools[tool_name]
             try:
-                return tool.run(input_params)
+                return tool.run(input_json)
             except Exception as e:
-                return f"错误：执行工具 '{name}' 时发生异常: {str(e)}"
+                return f"错误：执行工具 '{tool_name}' 时发生异常: {str(e)}"
         else:
-            return f"错误：未找到名为 '{name}' 的工具。"
+            return f"错误：未找到名为 '{tool_name}' 的工具。"
 
     def clear(self):
         """清空所有工具"""
         self._tools.clear()
         print("🧹 所有工具已清空。")
-
-
-# 全局工具注册表
-global_registry = ToolRegistry()
 
 
 # 示例函数

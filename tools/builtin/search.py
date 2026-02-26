@@ -16,12 +16,12 @@ class SearchTool(Tool):
         执行搜索
 
         Args:
-            parameters: 包含input参数的字典
+            parameters: 包含query参数的字典
 
         Returns:
             搜索结果
         """
-        query = parameters.get("input", "").strip()
+        query = parameters.get("query", "").strip()
         if not query:
             return "错误：搜索查询不能为空"
 
