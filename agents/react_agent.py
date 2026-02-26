@@ -227,7 +227,6 @@ if __name__ == "__main__":
     from ..tools.builtin.calculator import CalculatorTool
     from dotenv import load_dotenv
     
-    # 加载环境变量
     load_dotenv()
     
     # 初始化LLM
