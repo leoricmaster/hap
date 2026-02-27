@@ -284,9 +284,6 @@ class MemoryManager:
             memory_instance.clear()
         logger.info("所有记忆已清空")
 
-
-
-
     def _classify_memory_type(self, content: str, metadata: Optional[Dict[str, Any]]) -> str:
         """自动分类记忆类型"""
         if metadata and metadata.get("type"):
@@ -332,7 +329,6 @@ class MemoryManager:
         
         return max(0.0, min(1.0, importance))
     
-
     def __str__(self) -> str:
         stats = self.get_memory_stats()
         return f"MemoryManager(user={self.user_id}, total={stats['total_memories']})"
