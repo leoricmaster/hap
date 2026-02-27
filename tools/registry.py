@@ -30,6 +30,10 @@ class ToolRegistry:
         else:
             print(f"⚠️ 工具 '{name}' 不存在。")
 
+    def get_tool(self, name: str) -> Optional[Tool]:
+        """获取Tool对象"""
+        return self._tools.get(name)
+
     def get_tools_description(self) -> str:
         """
         获取所有可用工具的格式化描述字符串

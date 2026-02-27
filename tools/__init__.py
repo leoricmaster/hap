@@ -4,6 +4,7 @@ from .registry import ToolRegistry
 # 内置工具
 from .builtin.search import SearchTool
 from .builtin.calculator import CalculatorTool
+from .builtin.memory_tool import MemoryTool
 
 __all__ = [
     # 基础工具系统
@@ -14,4 +15,5 @@ __all__ = [
     # 内置工具
     "SearchTool",
     "CalculatorTool",
+    "MemoryTool"
 ]
