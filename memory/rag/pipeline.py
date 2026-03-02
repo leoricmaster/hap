@@ -2,46 +2,9 @@ from typing import List, Dict, Optional, Any
 import os
 import hashlib
 import numpy as np
+from markitdown import MarkItDown
 from ..embedding import get_text_embedder, get_dimension
 from ..storage.qdrant_store import QdrantVectorStore
-
-
-def _get_markitdown_instance():
-    """
-    Get a configured MarkItDown instance for document conversion.
-    """
-    try:
-        from markitdown import MarkItDown
-        return MarkItDown()
-    except ImportError:
-        print("[WARNING] MarkItDown not available. Install with: pip install markitdown")
-        return None
-
-
-def _is_markitdown_supported_format(path: str) -> bool:
-    """
-    Check if the file format is supported by MarkItDown.
-    Supports: PDF, Office docs (docx, xlsx, pptx), images (jpg, png, gif, bmp, tiff), 
-    audio (mp3, wav, m4a), HTML, text formats (txt, md, csv, json, xml), ZIP files, etc.
-    """
-    ext = (os.path.splitext(path)[1] or '').lower()
-    supported_formats = {
-        # Documents
-        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-        # Text formats
-        '.txt', '.md', '.csv', '.json', '.xml', '.html', '.htm',
-        # Images (OCR + metadata)
-        '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif', '.webp',
-        # Audio (transcription + metadata) 
-        '.mp3', '.wav', '.m4a', '.aac', '.flac', '.ogg',
-        # Archives
-        '.zip', '.tar', '.gz', '.rar',
-        # Code files
-        '.py', '.js', '.ts', '.java', '.cpp', '.c', '.h', '.css', '.scss',
-        # Other text
-        '.log', '.conf', '.ini', '.cfg', '.yaml', '.yml', '.toml'
-    }
-    return ext in supported_formats
 
 
 def _convert_to_markdown(path: str) -> str:
@@ -58,10 +21,8 @@ def _convert_to_markdown(path: str) -> str:
         return _enhanced_pdf_processing(path)
     
     # 其他格式使用原有MarkItDown
-    md_instance = _get_markitdown_instance()
-    if md_instance is None:
-        return _fallback_text_reader(path)
-    
+    md_instance = MarkItDown()
+
     try:
         result = md_instance.convert(path)
         text = getattr(result, "text_content", None)
@@ -70,33 +31,31 @@ def _convert_to_markdown(path: str) -> str:
         return ""
     except Exception as e:
         print(f"[WARNING] MarkItDown failed for {path}: {e}")
-        return _fallback_text_reader(path)
+        return ""
 
 def _enhanced_pdf_processing(path: str) -> str:
     """
     Enhanced PDF processing with post-processing cleanup.
     """
     print(f"[RAG] Using enhanced PDF processing for: {path}")
-    
+
     # 使用原有MarkItDown提取
-    md_instance = _get_markitdown_instance()
-    if md_instance is None:
-        return _fallback_text_reader(path)
-    
+    md_instance = MarkItDown()
+
     try:
         result = md_instance.convert(path)
         raw_text = getattr(result, "text_content", None)
         if not raw_text or not raw_text.strip():
             return ""
-        
+
         # 后处理：清理和重组文本
         cleaned_text = _post_process_pdf_text(raw_text)
         print(f"[RAG] PDF post-processing completed: {len(raw_text)} -> {len(cleaned_text)} chars")
         return cleaned_text
-        
+
     except Exception as e:
         print(f"[WARNING] Enhanced PDF processing failed for {path}: {e}")
-        return _fallback_text_reader(path)
+        return ""
 
 def _post_process_pdf_text(text: str) -> str:
     """
@@ -177,21 +136,6 @@ def _post_process_pdf_text(text: str) -> str:
         paragraphs.append(' '.join(current_paragraph))
     
     return '\n\n'.join(paragraphs)
-
-
-def _fallback_text_reader(path: str) -> str:
-    """
-    Simple fallback reader for basic text files when MarkItDown is unavailable.
-    """
-    try:
-        with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-            return f.read()
-    except Exception:
-        try:
-            with open(path, 'r', encoding='latin-1', errors='ignore') as f:
-                return f.read()
-        except Exception:
-            return ""
 
 
 def _detect_lang(sample: str) -> str:
@@ -470,10 +414,6 @@ def _create_default_vector_store(dimension: Optional[int] = None) -> QdrantVecto
         vector_size=dimension,
         distance="cosine"
     )
-
-
-# Cache functions removed - using unified embedder with internal caching
-
 
 def index_chunks(
     store = None, 

@@ -3,22 +3,19 @@ Neo4j图数据库存储实现
 """
 
 import logging
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from datetime import datetime
-
-try:
-    from neo4j import GraphDatabase
-    from neo4j.exceptions import ServiceUnavailable, AuthError
-    NEO4J_AVAILABLE = True
-except ImportError:
-    NEO4J_AVAILABLE = False
-    GraphDatabase = None
+from neo4j import GraphDatabase, Driver
+from neo4j.exceptions import ServiceUnavailable, AuthError
 
 logger = logging.getLogger(__name__)
 
+
 class Neo4jGraphStore:
     """Neo4j图数据库存储实现"""
-    
+
+    driver: Optional[Driver]
+
     def __init__(
         self,
         uri: str = "bolt://localhost:7687",
@@ -27,8 +24,7 @@ class Neo4jGraphStore:
         database: str = "neo4j",
         max_connection_lifetime: int = 3600,
         max_connection_pool_size: int = 50,
-        connection_acquisition_timeout: int = 60,
-        **kwargs
+        connection_acquisition_timeout: int = 60
     ):
         """
         初始化Neo4j图存储 (支持云API)
@@ -42,18 +38,13 @@ class Neo4jGraphStore:
             max_connection_pool_size: 最大连接池大小
             connection_acquisition_timeout: 连接获取超时(秒)
         """
-        if not NEO4J_AVAILABLE:
-            raise ImportError(
-                "neo4j未安装。请运行: pip install neo4j>=5.0.0"
-            )
-        
         self.uri = uri
         self.username = username
         self.password = password
         self.database = database
-        
+
         # 初始化驱动
-        self.driver = None
+        self.driver: Optional[Driver] = None
         self._initialize_driver(
             max_connection_lifetime=max_connection_lifetime,
             max_connection_pool_size=max_connection_pool_size,
@@ -62,6 +53,12 @@ class Neo4jGraphStore:
         
         # 创建索引
         self._create_indexes()
+
+    def _get_driver(self) -> Driver:
+        """获取已初始化的 driver"""
+        if self.driver is None:
+            raise RuntimeError("Neo4j driver not initialized")
+        return self.driver
     
     def _initialize_driver(self, **config):
         """初始化Neo4j驱动"""
@@ -73,7 +70,7 @@ class Neo4jGraphStore:
             )
             
             # 验证连接
-            self.driver.verify_connectivity()
+            self._get_driver().verify_connectivity()
             
             # 检查是否是云服务
             if "neo4j.io" in self.uri or "aura" in self.uri.lower():
@@ -111,16 +108,16 @@ class Neo4jGraphStore:
             "CREATE INDEX memory_timestamp_index IF NOT EXISTS FOR (m:Memory) ON (m.timestamp)",
         ]
         
-        with self.driver.session(database=self.database) as session:
+        with self._get_driver().session(database=self.database) as session:
             for index_query in indexes:
                 try:
-                    session.run(index_query)
+                    session.run(index_query)  # type: ignore
                 except Exception as e:
                     logger.debug(f"索引创建跳过 (可能已存在): {e}")
         
         logger.info("✅ Neo4j索引创建完成")
     
-    def add_entity(self, entity_id: str, name: str, entity_type: str, properties: Dict[str, Any] = None) -> bool:
+    def add_entity(self, entity_id: str, name: str, entity_type: str, properties: Optional[Dict[str, Any]] = None) -> bool:
         """
         添加实体节点
         
@@ -149,10 +146,10 @@ class Neo4jGraphStore:
             RETURN e
             """
             
-            with self.driver.session(database=self.database) as session:
-                result = session.run(query, entity_id=entity_id, properties=props)
+            with self._get_driver().session(database=self.database) as session:
+                result = session.run(query, entity_id=entity_id, properties=props)  # type: ignore
                 record = result.single()
-                
+
                 if record:
                     logger.debug(f"✅ 添加实体: {name} ({entity_type})")
                     return True
@@ -163,11 +160,11 @@ class Neo4jGraphStore:
             return False
     
     def add_relationship(
-        self, 
-        from_entity_id: str, 
-        to_entity_id: str, 
+        self,
+        from_entity_id: str,
+        to_entity_id: str,
         relationship_type: str,
-        properties: Dict[str, Any] = None
+        properties: Optional[Dict[str, Any]] = None
     ) -> bool:
         """
         添加实体间关系
@@ -196,14 +193,9 @@ class Neo4jGraphStore:
             SET r += $properties
             RETURN r
             """
-            
-            with self.driver.session(database=self.database) as session:
-                result = session.run(
-                    query,
-                    from_id=from_entity_id,
-                    to_id=to_entity_id,
-                    properties=props
-                )
+
+            with self._get_driver().session(database=self.database) as session:
+                result = session.run(query, from_id=from_entity_id, to_id=to_entity_id, properties=props)  # type: ignore
                 record = result.single()
                 
                 if record:
@@ -216,9 +208,9 @@ class Neo4jGraphStore:
             return False
     
     def find_related_entities(
-        self, 
-        entity_id: str, 
-        relationship_types: List[str] = None,
+        self,
+        entity_id: str,
+        relationship_types: Optional[List[str]] = None,
         max_depth: int = 2,
         limit: int = 50
     ) -> List[Dict[str, Any]]:
@@ -244,16 +236,16 @@ class Neo4jGraphStore:
             query = f"""
             MATCH path = (start:Entity {{id: $entity_id}})-[r{rel_filter}*1..{max_depth}]-(related:Entity)
             WHERE start.id <> related.id
-            RETURN DISTINCT related, 
+            RETURN DISTINCT related,
                    length(path) as distance,
                    [rel in relationships(path) | type(rel)] as relationship_path
             ORDER BY distance, related.name
             LIMIT $limit
             """
-            
-            with self.driver.session(database=self.database) as session:
-                result = session.run(query, entity_id=entity_id, limit=limit)
-                
+
+            with self._get_driver().session(database=self.database) as session:
+                result = session.run(query, entity_id=entity_id, limit=limit)  # type: ignore
+
                 entities = []
                 for record in result:
                     entity_data = dict(record["related"])
@@ -268,7 +260,7 @@ class Neo4jGraphStore:
             logger.error(f"❌ 查找相关实体失败: {e}")
             return []
     
-    def search_entities_by_name(self, name_pattern: str, entity_types: List[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
+    def search_entities_by_name(self, name_pattern: str, entity_types: Optional[List[str]] = None, limit: int = 20) -> List[Dict[str, Any]]:
         """
         按名称搜索实体
         
@@ -296,10 +288,10 @@ class Neo4jGraphStore:
             ORDER BY e.name
             LIMIT $limit
             """
-            
-            with self.driver.session(database=self.database) as session:
-                result = session.run(query, **params)
-                
+
+            with self._get_driver().session(database=self.database) as session:
+                result = session.run(query, **params)  # type: ignore
+
                 entities = []
                 for record in result:
                     entity_data = dict(record["e"])
@@ -329,21 +321,21 @@ class Neo4jGraphStore:
                    CASE WHEN startNode(r).id = $entity_id THEN 'outgoing' ELSE 'incoming' END as direction
             """
             
-            with self.driver.session(database=self.database) as session:
-                result = session.run(query, entity_id=entity_id)
-                
+            with self._get_driver().session(database=self.database) as session:
+                result = session.run(query, entity_id=entity_id)  # type: ignore
+
                 relationships = []
                 for record in result:
                     rel_data = dict(record["r"])
                     other_data = dict(record["other"])
-                    
+
                     relationship = {
                         "relationship": rel_data,
                         "other_entity": other_data,
                         "direction": record["direction"]
                     }
                     relationships.append(relationship)
-                
+
                 return relationships
                 
         except Exception as e:
@@ -366,10 +358,10 @@ class Neo4jGraphStore:
             DETACH DELETE e
             """
             
-            with self.driver.session(database=self.database) as session:
-                result = session.run(query, entity_id=entity_id)
+            with self._get_driver().session(database=self.database) as session:
+                result = session.run(query, entity_id=entity_id)  # type: ignore
                 summary = result.consume()
-                
+
                 deleted_count = summary.counters.nodes_deleted
                 logger.info(f"✅ 删除实体: {entity_id} (删除 {deleted_count} 个节点)")
                 return deleted_count > 0
@@ -388,13 +380,13 @@ class Neo4jGraphStore:
         try:
             query = "MATCH (n) DETACH DELETE n"
             
-            with self.driver.session(database=self.database) as session:
-                result = session.run(query)
+            with self._get_driver().session(database=self.database) as session:
+                result = session.run(query)  # type: ignore
                 summary = result.consume()
-                
+
                 deleted_nodes = summary.counters.nodes_deleted
                 deleted_relationships = summary.counters.relationships_deleted
-                
+
                 logger.info(f"✅ 清空Neo4j数据库: 删除 {deleted_nodes} 个节点, {deleted_relationships} 个关系")
                 return True
                 
@@ -418,12 +410,12 @@ class Neo4jGraphStore:
             }
             
             stats = {}
-            with self.driver.session(database=self.database) as session:
+            with self._get_driver().session(database=self.database) as session:
                 for key, query in queries.items():
-                    result = session.run(query)
+                    result = session.run(query)  # type: ignore
                     record = result.single()
                     stats[key] = record["count"] if record else 0
-            
+
             return stats
             
         except Exception as e:
@@ -438,10 +430,10 @@ class Neo4jGraphStore:
             bool: 服务是否健康
         """
         try:
-            with self.driver.session(database=self.database) as session:
-                result = session.run("RETURN 1 as health")
+            with self._get_driver().session(database=self.database) as session:
+                result = session.run("RETURN 1 as health")  # type: ignore
                 record = result.single()
-                return record["health"] == 1
+                return record["health"] == 1 if record else False
         except Exception as e:
             logger.error(f"❌ Neo4j健康检查失败: {e}")
             return False

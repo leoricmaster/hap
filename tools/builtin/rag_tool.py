@@ -113,7 +113,10 @@ class RAGTool(Tool):
         if not self.validate_parameters(parameters):
             return "❌ 参数验证失败：缺少必需的参数"
 
-        action = cast(str, parameters.get("action"))
+        action = parameters.get("action")
+        if not action:
+            return "❌ 缺少必需的 action 参数"
+
         # 移除action参数，传递其余参数给execute方法
         kwargs = {k: v for k, v in parameters.items() if k != "action"}
 
@@ -357,23 +360,12 @@ class RAGTool(Tool):
                 score = result.get("score", 0.0)
                 content = meta.get("content", "")[:200] + "..."
                 source = meta.get("source_path", "unknown")
-                
-                # 安全处理Unicode
-                def clean_text(text):
-                    try:
-                        return str(text).encode('utf-8', errors='ignore').decode('utf-8')
-                    except Exception:
-                        return str(text)
-                
-                clean_content = clean_text(content)
-                clean_source = clean_text(source)
-                
-                search_result.append(f"\n{i}. 文档: **{clean_source}** (相似度: {score:.3f})")
-                search_result.append(f"   {clean_content}")
-                
+
+                search_result.append(f"\n{i}. 文档: **{source}** (相似度: {score:.3f})")
+                search_result.append(f"   {content}")
+
                 if include_citations and meta.get("heading_path"):
-                    clean_heading = clean_text(str(meta['heading_path']))
-                    search_result.append(f"   章节: {clean_heading}")
+                    search_result.append(f"   章节: {meta['heading_path']}")
             
             return "\n".join(search_result)
             
@@ -669,76 +661,6 @@ class RAGTool(Tool):
         except Exception as e:
             return f"获取上下文失败: {str(e)}"
     
-    def batch_add_texts(self, texts: List[str], document_ids: Optional[List[str]] = None, chunk_size: int = 800, chunk_overlap: int = 100, namespace: Optional[str] = None) -> str:
-        """批量添加文本"""
-        try:
-            if not texts:
-                return "❌ 文本列表不能为空"
-            
-            if document_ids and len(document_ids) != len(texts):
-                return "❌ 文本数量和文档ID数量不匹配"
-            
-            pipeline = self._get_pipeline(namespace)
-            t0 = time.time()
-            
-            total_chunks = 0
-            successful_files = []
-            
-            for i, text in enumerate(texts):
-                if not text or not text.strip():
-                    continue
-                    
-                doc_id = document_ids[i] if document_ids else f"batch_text_{i}"
-                tmp_path = os.path.join(self.knowledge_base_path, f"{doc_id}.md")
-                
-                try:
-                    with open(tmp_path, 'w', encoding='utf-8') as f:
-                        f.write(text)
-                    
-                    chunks_added = pipeline["add_documents"](
-                        file_paths=[tmp_path],
-                        chunk_size=chunk_size,
-                        chunk_overlap=chunk_overlap
-                    )
-                    
-                    total_chunks += chunks_added
-                    successful_files.append(doc_id)
-                    
-                finally:
-                    # 清理临时文件
-                    try:
-                        if os.path.exists(tmp_path):
-                            os.remove(tmp_path)
-                    except Exception:
-                        pass
-            
-            t1 = time.time()
-            process_ms = int((t1 - t0) * 1000)
-            
-            return (
-                f"✅ 批量添加完成\n"
-                f"📊 成功文件: {len(successful_files)}/{len(texts)}\n"
-                f"📊 总分块数: {total_chunks}\n"
-                f"⏱️ 处理时间: {process_ms}ms"
-            )
-            
-        except Exception as e:
-            return f"❌ 批量添加失败: {str(e)}"
-    
-    def clear_all_namespaces(self) -> str:
-        """清空当前工具管理的所有命名空间数据"""
-        try:
-            for ns, pipeline in self._pipelines.items():
-                store = pipeline.get("store")
-                if store:
-                    store.clear_collection()
-            self._pipelines.clear()
-            # 重新初始化默认命名空间
-            self._init_components()
-            return "✅ 所有命名空间数据已清空并重新初始化"
-        except Exception as e:
-            return f"❌ 清空所有命名空间失败: {str(e)}"
-    
     # ========================================
     # 便捷接口方法（简化用户调用）
     # ========================================
@@ -779,99 +701,3 @@ class RAGTool(Tool):
         }
         params.update(kwargs)
         return self.run(params)
-    
-    def add_documents_batch(self, file_paths: List[str], namespace: str = "default") -> str:
-        """批量添加多个文档"""
-        if not file_paths:
-            return "❌ 文件路径列表不能为空"
-        
-        results = []
-        successful = 0
-        failed = 0
-        total_chunks = 0
-        start_time = time.time()
-        
-        for i, file_path in enumerate(file_paths, 1):
-            print(f"📄 处理文档 {i}/{len(file_paths)}: {os.path.basename(file_path)}")
-            
-            try:
-                result = self.add_document(file_path, namespace)
-                if "✅" in result:
-                    successful += 1
-                    # 提取分块数量
-                    if "分块数量:" in result:
-                        chunks = int(result.split("分块数量: ")[1].split("\n")[0])
-                        total_chunks += chunks
-                else:
-                    failed += 1
-                    results.append(f"❌ {os.path.basename(file_path)}: 处理失败")
-            except Exception as e:
-                failed += 1
-                results.append(f"❌ {os.path.basename(file_path)}: {str(e)}")
-        
-        process_time = int((time.time() - start_time) * 1000)
-        
-        summary = [
-            "📊 **批量处理完成**",
-            f"✅ 成功: {successful}/{len(file_paths)} 个文档",
-            f"📊 总分块数: {total_chunks}",
-            f"⏱️ 总耗时: {process_time}ms",
-            f"📝 命名空间: {namespace}"
-        ]
-        
-        if failed > 0:
-            summary.append(f"❌ 失败: {failed} 个文档")
-            summary.append("\n**失败详情:**")
-            summary.extend(results)
-        
-        return "\n".join(summary)
-    
-    def add_texts_batch(self, texts: List[str], namespace: str = "default", document_ids: Optional[List[str]] = None) -> str:
-        """批量添加多个文本"""
-        if not texts:
-            return "❌ 文本列表不能为空"
-        
-        if document_ids and len(document_ids) != len(texts):
-            return "❌ 文本数量和文档ID数量不匹配"
-        
-        results = []
-        successful = 0
-        failed = 0
-        total_chunks = 0
-        start_time = time.time()
-        
-        for i, text in enumerate(texts):
-            doc_id = document_ids[i] if document_ids else f"batch_text_{i+1}"
-            print(f"📝 处理文本 {i+1}/{len(texts)}: {doc_id}")
-            
-            try:
-                result = self.add_text(text, namespace, doc_id)
-                if "✅" in result:
-                    successful += 1
-                    # 提取分块数量
-                    if "分块数量:" in result:
-                        chunks = int(result.split("分块数量: ")[1].split("\n")[0])
-                        total_chunks += chunks
-                else:
-                    failed += 1
-                    results.append(f"❌ {doc_id}: 处理失败")
-            except Exception as e:
-                failed += 1
-                results.append(f"❌ {doc_id}: {str(e)}")
-        
-        process_time = int((time.time() - start_time) * 1000)
-        
-        summary = [
-            "📊 **批量文本处理完成**",
-            f"✅ 成功: {successful}/{len(texts)} 个文本",
-            f"📊 总分块数: {total_chunks}",
-            f"⏱️ 总耗时: {process_time}ms",
-            f"📝 命名空间: {namespace}"
-        ]
-        
-        if failed > 0:
-            summary.append(f"❌ 失败: {failed} 个文本")
-            summary.append("\n**失败详情:**")
-            summary.extend(results)
-        
-        return "\n".join(summary)

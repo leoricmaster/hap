@@ -70,8 +70,7 @@ class QdrantVectorStore:
         collection_name: str = "hello_agents_vectors",
         vector_size: int = 384,
         distance: str = "cosine",
-        timeout: int = 30,
-        **kwargs
+        timeout: int = 30
     ):
         """
         初始化Qdrant向量存储 (支持云API)
@@ -346,7 +345,7 @@ class QdrantVectorStore:
             if where:
                 conditions = []
                 for key, value in where.items():
-                    if isinstance(value, (str, int, float, bool)):
+                    if isinstance(value, (str, int, bool)):
                         conditions.append(
                             FieldCondition(
                                 key=key,
