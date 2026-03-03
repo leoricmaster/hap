@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional, cast
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 from ..base import Tool, ToolParameter
 from ...memory import MemoryManager, MemoryConfig
@@ -54,7 +54,9 @@ class MemoryTool(Tool):
         if not self.validate_parameters(parameters):
             return "❌ 参数验证失败：缺少必需的参数"
 
-        action = cast(str, parameters.get("action"))
+        action = parameters.get("action")
+        if not action:
+            return "❌ 缺少必需的 action 参数"
         # 移除action参数，传递其余参数给execute方法
         kwargs = {k: v for k, v in parameters.items() if k != "action"}
 
