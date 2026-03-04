@@ -55,7 +55,7 @@ class QdrantConfig(BaseModel):
         if vector_size_str:
             vector_size = int(vector_size_str)
         else:
-            from ..memory.embedding import get_dimension
+            from memory.embedding import get_dimension
             vector_size = get_dimension()
         return cls(
             url=os.getenv("QDRANT_URL"),

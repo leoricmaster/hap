@@ -10,7 +10,7 @@
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 import heapq
-from ..base import BaseMemory, MemoryItem, MemoryConfig
+from memory.base import BaseMemory, MemoryItem, MemoryConfig
 
 
 class WorkingMemory(BaseMemory):

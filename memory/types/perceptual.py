@@ -16,9 +16,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from ..base import BaseMemory, MemoryItem, MemoryConfig
-from ..storage import SQLiteDocumentStore, QdrantVectorStore
-from ..embedding import get_text_embedder, get_dimension
+from memory.base import BaseMemory, MemoryItem, MemoryConfig
+from memory.storage import SQLiteDocumentStore, QdrantVectorStore
+from memory.embedding import get_text_embedder, get_dimension
 
 class Perception:
     """感知数据实体"""

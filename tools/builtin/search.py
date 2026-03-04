@@ -1,6 +1,6 @@
 import os
 from typing import Optional, Any, List, Dict
-from ..base import Tool, ToolParameter
+from tools.base import Tool, ToolParameter
 
 
 class SearchTool(Tool):

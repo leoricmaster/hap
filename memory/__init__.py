@@ -8,19 +8,19 @@
 """
 
 # Memory Core Layer (记忆核心层)
-from .manager import MemoryManager
+from memory.manager import MemoryManager
 
 # Memory Types Layer (记忆类型层)
-from .types.working import WorkingMemory
-from .types.episodic import EpisodicMemory
-from .types.semantic import SemanticMemory
-from .types.perceptual import PerceptualMemory
+from memory.types.working import WorkingMemory
+from memory.types.episodic import EpisodicMemory
+from memory.types.semantic import SemanticMemory
+from memory.types.perceptual import PerceptualMemory
 
 # Storage Layer (存储层)
-from .storage.document_store import DocumentStore, SQLiteDocumentStore
+from memory.storage.document_store import DocumentStore, SQLiteDocumentStore
 
 # Base classes and utilities
-from .base import MemoryItem, MemoryConfig, BaseMemory
+from memory.base import MemoryItem, MemoryConfig, BaseMemory
 
 __all__ = [
     # Core Layer

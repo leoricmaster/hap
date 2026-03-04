@@ -2,11 +2,11 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 import uuid
 import logging
-from .base import MemoryItem, MemoryConfig
-from .types.working import WorkingMemory
-from .types.episodic import EpisodicMemory
-from .types.semantic import SemanticMemory
-from .types.perceptual import PerceptualMemory
+from memory.base import MemoryItem, MemoryConfig
+from memory.types.working import WorkingMemory
+from memory.types.episodic import EpisodicMemory
+from memory.types.semantic import SemanticMemory
+from memory.types.perceptual import PerceptualMemory
 
 
 logger = logging.getLogger(__name__)

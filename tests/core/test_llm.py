@@ -26,7 +26,7 @@ def test_llm_basic():
         for chunk in llm_client.think(example_messages):
             print(chunk, end="")
         print("\n")
-        logger.info("\n--- LLM 响应结束 ---")
+        logger.info("--- LLM 响应结束 ---")
 
     except ValueError as e:
         logger.error(f"配置错误: {e}")

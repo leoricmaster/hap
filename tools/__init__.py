@@ -1,11 +1,11 @@
-from .base import Tool, ToolParameter
-from .registry import ToolRegistry
+from tools.base import Tool, ToolParameter
+from tools.registry import ToolRegistry
 
 # 内置工具
-from .builtin.search import SearchTool
-from .builtin.calculator import CalculatorTool
-from .builtin.memory_tool import MemoryTool
-from .builtin.rag_tool import RAGTool
+from tools.builtin.search import SearchTool
+from tools.builtin.calculator import CalculatorTool
+from tools.builtin.memory_tool import MemoryTool
+from tools.builtin.rag_tool import RAGTool
 
 __all__ = [
     # 基础工具系统

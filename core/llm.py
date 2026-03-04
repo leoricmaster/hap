@@ -33,12 +33,12 @@ class HelloAgentsLLM:
         """
         api_key = api_key or os.getenv("LLM_API_KEY")
         base_url = base_url or os.getenv("LLM_BASE_URL")
-        self._model = model or os.getenv("LLM_MODEL_ID")
-        self._temperature = temperature
-        self._max_tokens = max_tokens
+        self.model = model or os.getenv("LLM_MODEL_ID")
+        self.temperature = temperature
+        self.max_tokens = max_tokens
         timeout = timeout or int(os.getenv("LLM_TIMEOUT", 60))
         
-        if not all([api_key, base_url, self._model]):
+        if not all([api_key, base_url, self.model]):
             raise ValueError(" `api_key`, `base_url`,`model` must be provided or defined in .env file.")
 
         self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
@@ -55,14 +55,14 @@ class HelloAgentsLLM:
         Yields:
             str: 流式响应的文本片段
         """
-        assert self._model is not None
-        logger.info(f"🧠 正在调用 {self._model} 模型 ...")
+        assert self.model is not None
+        logger.info(f"🧠 正在调用 {self.model} 模型 ...")
         try:
             response = self._client.chat.completions.create(
                 messages = messages, # type: ignore[arg-type]
-                model = self._model,
-                temperature = kwargs.get('temperature', self._temperature),
-                max_tokens = kwargs.get('max_tokens', self._max_tokens),
+                model = self.model,
+                temperature = kwargs.get('temperature', self.temperature),
+                max_tokens = kwargs.get('max_tokens', self.max_tokens),
                 stream=True,
                 **{k: v for k, v in kwargs.items() if k not in ['temperature', 'max_tokens']}
             )
@@ -84,12 +84,12 @@ class HelloAgentsLLM:
         适用于不需要流式输出的场景。
         """
         try:
-            assert self._model is not None
+            assert self.model is not None
             response = self._client.chat.completions.create(
                 messages=messages, # type: ignore[arg-type]
-                model=self._model,
-                temperature=kwargs.get('temperature', self._temperature),
-                max_tokens=kwargs.get('max_tokens', self._max_tokens),
+                model=self.model,
+                temperature=kwargs.get('temperature', self.temperature),
+                max_tokens=kwargs.get('max_tokens', self.max_tokens),
                 **{k: v for k, v in kwargs.items() if k not in ['temperature', 'max_tokens']}
             )
             return response.choices[0].message.content

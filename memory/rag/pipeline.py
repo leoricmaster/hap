@@ -3,8 +3,8 @@ import os
 import hashlib
 import numpy as np
 from markitdown import MarkItDown
-from ..embedding import get_text_embedder, get_dimension
-from ..storage.qdrant_store import QdrantVectorStore
+from memory.embedding import get_text_embedder, get_dimension
+from memory.storage.qdrant_store import QdrantVectorStore
 
 
 def _convert_to_markdown(path: str) -> str:
