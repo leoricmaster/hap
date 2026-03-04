@@ -1,7 +1,6 @@
 from typing import Optional, List, Dict, Any
 from core.agent import Agent
 from core.llm import HelloAgentsLLM
-from core.message import Message
 
 # 默认提示词模板
 DEFAULT_PROMPTS = {
@@ -156,8 +155,8 @@ class ReflectionAgent(Agent):
         print(f"\n--- 任务完成 ---\n最终结果:\n{final_result}")
 
         # 保存到历史记录
-        self.add_message(Message("user", input_text))
-        self.add_message(Message("assistant", final_result))
+        self.add_message("user", input_text)
+        self.add_message("assistant", final_result)
 
         return final_result
     

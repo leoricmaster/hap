@@ -1,11 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import Optional
-from .message import Message
 from .llm import HelloAgentsLLM
 
 class Agent(ABC):
     """Agent基类"""
-    
+
     def __init__(
         self,
         name: str,
@@ -15,22 +14,22 @@ class Agent(ABC):
         self.name = name
         self.llm = llm
         self.system_prompt = system_prompt
-        self._history: list[Message] = []
-    
+        self._history: list[dict] = []
+
     @abstractmethod
     def run(self, input_text: str, **kwargs) -> str:
         """运行Agent"""
         pass
-    
-    def add_message(self, message: Message):
+
+    def add_message(self, role: str, content: str):
         """添加消息到历史记录"""
-        self._history.append(message)
-    
+        self._history.append({"role": role, "content": content})
+
     def clear_history(self):
         """清空历史记录"""
         self._history.clear()
 
-    def get_history(self) -> list[Message]:
+    def get_history(self) -> list[dict]:
         """获取历史记录"""
         return self._history.copy()
 

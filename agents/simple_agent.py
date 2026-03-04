@@ -4,7 +4,6 @@ from typing import Optional, Iterator, TYPE_CHECKING
 import re
 from ..core.agent import Agent
 from ..core.llm import HelloAgentsLLM
-from ..core.message import Message
 
 if TYPE_CHECKING:
     from ..tools.registry import ToolRegistry
@@ -175,7 +174,7 @@ class SimpleAgent(Agent):
         
         # 添加历史消息
         for msg in self._history:
-            messages.append({"role": msg.role, "content": msg.content})
+            messages.append(msg)
         
         # 添加当前用户消息
         messages.append({"role": "user", "content": input_text})
@@ -183,8 +182,8 @@ class SimpleAgent(Agent):
         # 如果没有启用工具调用，使用原有逻辑
         if not self.enable_tool_calling:
             response = self.llm.invoke(messages, **kwargs)
-            self.add_message(Message("user", input_text))
-            self.add_message(Message("assistant", response))
+            self.add_message("user", input_text)
+            self.add_message("assistant", response)
             return response
         
         # 迭代处理，支持多轮工具调用
@@ -228,8 +227,8 @@ class SimpleAgent(Agent):
             final_response = self.llm.invoke(messages, **kwargs)
         
         # 保存到历史记录
-        self.add_message(Message("user", input_text))
-        self.add_message(Message("assistant", final_response))
+        self.add_message("user", input_text)
+        self.add_message("assistant", final_response)
 
         return final_response
 
@@ -264,7 +263,7 @@ class SimpleAgent(Agent):
             messages.append({"role": "system", "content": self.system_prompt})
         
         for msg in self._history:
-            messages.append({"role": msg.role, "content": msg.content})
+            messages.append(msg)
         
         messages.append({"role": "user", "content": input_text})
         
@@ -275,5 +274,5 @@ class SimpleAgent(Agent):
             yield chunk
         
         # 保存完整对话到历史记录
-        self.add_message(Message("user", input_text))
-        self.add_message(Message("assistant", full_response))
+        self.add_message("user", input_text)
+        self.add_message("assistant", full_response)

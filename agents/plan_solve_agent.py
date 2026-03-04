@@ -4,7 +4,6 @@ import re
 from typing import Optional, List, Dict
 from core.agent import Agent
 from core.llm import HelloAgentsLLM
-from core.message import Message
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +158,7 @@ class Executor:
 
             # 记录计划执行开始
             if agent:
-                agent.add_message(Message("assistant", f"**步骤 {i}**: {step}"))
+                agent.add_message("assistant", f"**步骤 {i}**: {step}")
 
             prompt = self.prompt_template.format(
                 question=question,
@@ -192,7 +191,7 @@ class Executor:
 
             # 记录步骤结果到Agent历史
             if agent:
-                agent.add_message(Message("assistant", f"**结果**: {response_text}"))
+                agent.add_message("assistant", f"**结果**: {response_text}")
 
             logger.info(f"✅ 步骤 {i} 已完成")
 
@@ -262,10 +261,10 @@ class PlanAndSolveAgent(Agent):
 
         # 添加系统提示词
         if self.system_prompt:
-            self.add_message(Message("system", self.system_prompt))
+            self.add_message("system", self.system_prompt)
 
         # 添加用户问题
-        self.add_message(Message("user", input_text))
+        self.add_message("user", input_text)
 
         # 1. 生成计划
         plan = self.planner.plan(input_text, **kwargs)
@@ -273,12 +272,12 @@ class PlanAndSolveAgent(Agent):
             final_answer = "无法生成有效的行动计划，任务终止。"
             logger.warning(f"任务终止: {final_answer}")
 
-            self.add_message(Message("assistant", final_answer))
+            self.add_message("assistant", final_answer)
             return final_answer
 
         # 记录生成的计划
         plan_text = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan))
-        self.add_message(Message("assistant", f"**执行计划**:\n{plan_text}"))
+        self.add_message("assistant", f"**执行计划**:\n{plan_text}")
 
         # 2. 执行计划
         final_answer, step_results = self.executor.execute(
@@ -292,7 +291,7 @@ class PlanAndSolveAgent(Agent):
         logger.info(f"\n--- 任务完成 ---\n最终答案: {final_answer}")
 
         # 添加最终答案
-        self.add_message(Message("assistant", f"**最终答案**: {final_answer}"))
+        self.add_message("assistant", f"**最终答案**: {final_answer}")
 
         return final_answer
 

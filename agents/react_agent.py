@@ -4,7 +4,6 @@ import re
 from typing import Optional, Tuple, Dict, Any
 from core.agent import Agent
 from core.llm import HelloAgentsLLM
-from core.message import Message
 from tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -112,7 +111,7 @@ class ReActAgent(Agent):
 
         # 1. 添加系统提示词（用户自定义或默认）
         system_content = self.system_prompt if self.system_prompt else DEFAULT_SYSTEM_PROMPT
-        self.add_message(Message("system", system_content))
+        self.add_message("system", system_content)
 
         # 2. 添加首次用户消息（包含工具描述和具体问题）
         tools_desc = self._tool_registry.get_tools_description()
@@ -120,14 +119,14 @@ class ReActAgent(Agent):
             tools=tools_desc,
             question=input_text
         )
-        self.add_message(Message("user", initial_prompt))
+        self.add_message("user", initial_prompt)
 
         while current_step < self._max_steps:
             current_step += 1
             logger.info(f"\n--- 第 {current_step} 步 ---")
 
             # 从 self._history 构建 messages 传给 LLM
-            messages = [{"role": m.role, "content": m.content} for m in self._history]
+            messages = [m for m in self._history]
             response_text = self.llm.invoke(messages, **kwargs)
 
             if not response_text:
@@ -145,7 +144,7 @@ class ReActAgent(Agent):
                 break
 
             # 添加助手的回复到历史
-            self.add_message(Message("assistant", response_text))
+            self.add_message("assistant", response_text)
 
             # 检查是否完成
             if action.startswith(_FINISH_ACTION):
@@ -157,7 +156,7 @@ class ReActAgent(Agent):
             tool_name, input_json = self._parse_action(action)
             if not tool_name or input_json is None:
                 # 添加观察结果到历史，让模型继续
-                self.add_message(Message("user", "Observation: 无效的Action格式，请检查。"))
+                self.add_message("user", "Observation: 无效的Action格式，请检查。")
                 continue
 
             logger.info(f"🎬 行动: {tool_name}[{input_json}]")
@@ -167,13 +166,13 @@ class ReActAgent(Agent):
             logger.info(f"👀 观察: {observation}")
 
             # 添加观察结果到历史
-            self.add_message(Message("user", f"Observation: {observation}"))
+            self.add_message("user", f"Observation: {observation}")
 
         logger.warning("⏰ 已达到最大步数，流程终止。")
         final_answer = "抱歉，我无法在限定步数内完成这个任务。"
 
         # 添加最终结果到历史
-        self.add_message(Message("assistant", final_answer))
+        self.add_message("assistant", final_answer)
 
         return final_answer
     
