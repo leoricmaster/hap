@@ -30,6 +30,10 @@ class Agent(ABC):
         """清空历史记录"""
         self._history.clear()
 
+    def get_history(self) -> list[Message]:
+        """获取历史记录"""
+        return self._history.copy()
+
     def __str__(self) -> str:
         return f"Agent(name={self.name})"
     

@@ -1,7 +1,7 @@
 from typing import Optional, List, Dict, Any
-from ..core.agent import Agent
-from ..core.llm import HelloAgentsLLM
-from ..core.message import Message
+from core.agent import Agent
+from core.llm import HelloAgentsLLM
+from core.message import Message
 
 # 默认提示词模板
 DEFAULT_PROMPTS = {
@@ -168,27 +168,3 @@ class ReflectionAgent(Agent):
         response_generator = self.llm.think(messages=messages)
         response_text = "".join(chunk for chunk in response_generator) if response_generator else ""
         return response_text
-
-
-# 示例用法
-if __name__ == "__main__":
-    from dotenv import load_dotenv
-
-    load_dotenv()
-
-    # 创建LLM客户端
-    llm_client = HelloAgentsLLM()
-    
-    # 创建ReflectionAgent实例
-    agent = ReflectionAgent(
-        name="代码优化助手",
-        llm=llm_client,
-        max_iterations=3
-    )
-    
-    # 示例任务
-    task = "编写一个Python函数，找出1到n之间所有的素数 (prime numbers)。"
-    
-    # 运行Agent完成任务
-    result = agent.run(task)
-    print(f"\n最终结果:\n{result}")
