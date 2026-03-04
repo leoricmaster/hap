@@ -1,8 +1,12 @@
 import ast
+import logging
+import re
 from typing import Optional, List, Dict
-from ..core.agent import Agent
-from ..core.llm import HelloAgentsLLM
-from ..core.message import Message
+from core.agent import Agent
+from core.llm import HelloAgentsLLM
+from core.message import Message
+
+logger = logging.getLogger(__name__)
 
 # 默认规划器提示词模板
 DEFAULT_PLANNER_PROMPT = """
@@ -60,22 +64,50 @@ class Planner:
         prompt = self.prompt_template.format(question=question)
         messages = [{"role": "user", "content": prompt}]
 
-        print("--- 正在生成计划 ---")
+        logger.info("--- 正在生成计划 ---")
         response_text = self.llm_client.invoke(messages, **kwargs) or ""
-        print(f"✅ 计划已生成:\n{response_text}")
+        logger.info(f"LLM 响应:\n{response_text}")
 
-        try:
-            # 提取Python代码块中的列表
-            plan_str = response_text.split("```python")[1].split("```")[0].strip()
-            plan = ast.literal_eval(plan_str)
-            return plan if isinstance(plan, list) else []
-        except (ValueError, SyntaxError, IndexError) as e:
-            print(f"❌ 解析计划时出错: {e}")
-            print(f"原始响应: {response_text}")
+        plan = self._extract_plan(response_text)
+        if plan:
+            logger.info(f"✅ 成功解析计划，共 {len(plan)} 步")
+        else:
+            logger.warning("❌ 未能从响应中解析出有效计划")
+
+        return plan
+
+    def _extract_plan(self, response_text: str) -> List[str]:
+        """从响应中提取计划列表，支持多种格式"""
+        if not response_text:
             return []
-        except Exception as e:
-            print(f"❌ 解析计划时发生未知错误: {e}")
-            return []
+
+        # 尝试多种模式匹配
+        patterns = [
+            r'```python\s*(.*?)\s*```',  # ```python ... ```
+            r'```\s*(.*?)\s*```',         # ``` ... ```
+        ]
+
+        candidates = []
+
+        # 从代码块中提取
+        for pattern in patterns:
+            matches = re.findall(pattern, response_text, re.DOTALL | re.IGNORECASE)
+            candidates.extend(matches)
+
+        # 直接尝试整个文本（去除首尾空白）
+        candidates.append(response_text.strip())
+
+        for candidate in candidates:
+            candidate = candidate.strip()
+            try:
+                plan = ast.literal_eval(candidate)
+                if isinstance(plan, list) and all(isinstance(s, str) and s.strip() for s in plan):
+                    return [s.strip() for s in plan if s.strip()]
+            except (ValueError, SyntaxError):
+                continue
+
+        logger.warning(f"无法从响应中解析计划: {response_text[:200]}...")
+        return []
 
 class Executor:
     """执行器 - 负责按计划逐步执行"""
@@ -84,60 +116,109 @@ class Executor:
         self.llm_client = llm_client
         self.prompt_template = prompt_template if prompt_template else DEFAULT_EXECUTOR_PROMPT
 
-    def execute(self, question: str, plan: List[str], **kwargs) -> str:
+    def execute(
+        self,
+        question: str,
+        plan: List[str],
+        agent: Optional[Agent] = None,
+        max_steps: int = 10,
+        **kwargs
+    ) -> tuple[str, List[Dict]]:
         """
         按计划执行任务
 
         Args:
             question: 原始问题
             plan: 执行计划
+            agent: 可选的Agent实例，用于记录历史
+            max_steps: 最大执行步数
             **kwargs: LLM调用参数
 
         Returns:
-            最终答案
+            (最终答案, 步骤执行历史列表)
         """
+        # 过滤并限制步骤数
+        valid_steps = [s.strip() for s in plan if s and s.strip()]
+        steps_to_execute = valid_steps[:max_steps]
+
+        if len(valid_steps) > max_steps:
+            logger.warning(f"计划步骤过多({len(valid_steps)}步)，已截断至{max_steps}步")
+
         history = ""
         final_answer = ""
+        step_results = []
 
-        print("\n--- 正在执行计划 ---")
-        for i, step in enumerate(plan, 1):
-            print(f"\n-> 正在执行步骤 {i}/{len(plan)}: {step}")
+        logger.info(f"\n--- 正在执行计划 ({len(steps_to_execute)} 步) ---")
+
+        for i, step in enumerate(steps_to_execute, 1):
+            if not step:
+                logger.warning(f"步骤 {i} 为空，跳过")
+                continue
+
+            logger.info(f"-> 正在执行步骤 {i}/{len(steps_to_execute)}: {step}")
+
+            # 记录计划执行开始
+            if agent:
+                agent.add_message(Message("assistant", f"**步骤 {i}**: {step}"))
+
             prompt = self.prompt_template.format(
                 question=question,
-                plan=plan,
+                plan="\n".join(f"{j+1}. {s}" for j, s in enumerate(steps_to_execute)),
                 history=history if history else "无",
                 current_step=step
             )
             messages = [{"role": "user", "content": prompt}]
 
-            response_text = self.llm_client.invoke(messages, **kwargs) or ""
+            try:
+                response_text = self.llm_client.invoke(messages, **kwargs) or ""
+
+                # 检查结果有效性
+                if not response_text.strip():
+                    response_text = "[步骤执行返回空结果]"
+                    logger.warning(f"步骤 {i} 返回空结果")
+
+            except Exception as e:
+                response_text = f"[步骤执行出错: {str(e)}]"
+                logger.error(f"步骤 {i} 执行异常: {e}")
 
             history += f"步骤 {i}: {step}\n结果: {response_text}\n\n"
             final_answer = response_text
-            print(f"✅ 步骤 {i} 已完成，结果: {final_answer}")
 
-        return final_answer
+            step_results.append({
+                "step": i,
+                "description": step,
+                "result": response_text
+            })
+
+            # 记录步骤结果到Agent历史
+            if agent:
+                agent.add_message(Message("assistant", f"**结果**: {response_text}"))
+
+            logger.info(f"✅ 步骤 {i} 已完成")
+
+        return final_answer, step_results
 
 
 class PlanAndSolveAgent(Agent):
     """
     Plan and Solve Agent - 分解规划与逐步执行的智能体
-    
+
     这个Agent能够：
     1. 将复杂问题分解为简单步骤
     2. 按照计划逐步执行
     3. 维护执行历史和上下文
     4. 得出最终答案
-    
+
     特别适合多步骤推理、数学问题、复杂分析等任务。
     """
-    
+
     def __init__(
         self,
         name: str,
         llm: HelloAgentsLLM,
         system_prompt: Optional[str] = None,
-        custom_prompts: Optional[Dict[str, str]] = None
+        custom_prompts: Optional[Dict[str, str]] = None,
+        max_steps: int = 10
     ):
         """
         初始化PlanAndSolveAgent
@@ -146,10 +227,11 @@ class PlanAndSolveAgent(Agent):
             name: Agent名称
             llm: LLM实例
             system_prompt: 系统提示词
-            config: 配置对象
             custom_prompts: 自定义提示词模板 {"planner": "", "executor": ""}
+            max_steps: 最大执行步数
         """
         super().__init__(name, llm, system_prompt)
+        self.max_steps = max_steps
 
         # 设置提示词模板：用户自定义优先，否则使用默认模板
         if custom_prompts:
@@ -161,61 +243,56 @@ class PlanAndSolveAgent(Agent):
 
         self.planner = Planner(self.llm, planner_prompt)
         self.executor = Executor(self.llm, executor_prompt)
-    
+
     def run(self, input_text: str, **kwargs) -> str:
         """
         运行Plan and Solve Agent
-        
+
         Args:
             input_text: 要解决的问题
             **kwargs: 其他参数
-            
+
         Returns:
             最终答案
         """
-        print(f"\n🤖 {self.name} 开始处理问题: {input_text}")
-        
+        logger.info(f"\n🤖 {self.name} 开始处理问题: {input_text}")
+
+        # 清空历史，开始新的对话
+        self.clear_history()
+
+        # 添加系统提示词
+        if self.system_prompt:
+            self.add_message(Message("system", self.system_prompt))
+
+        # 添加用户问题
+        self.add_message(Message("user", input_text))
+
         # 1. 生成计划
         plan = self.planner.plan(input_text, **kwargs)
         if not plan:
             final_answer = "无法生成有效的行动计划，任务终止。"
-            print(f"\n--- 任务终止 ---\n{final_answer}")
-            
-            # 保存到历史记录
-            self.add_message(Message("user", input_text))
+            logger.warning(f"任务终止: {final_answer}")
+
             self.add_message(Message("assistant", final_answer))
-            
             return final_answer
-        
+
+        # 记录生成的计划
+        plan_text = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan))
+        self.add_message(Message("assistant", f"**执行计划**:\n{plan_text}"))
+
         # 2. 执行计划
-        final_answer = self.executor.execute(input_text, plan, **kwargs)
-        print(f"\n--- 任务完成 ---\n最终答案: {final_answer}")
-        
-        # 保存到历史记录
-        self.add_message(Message("user", input_text))
-        self.add_message(Message("assistant", final_answer))
-        
+        final_answer, step_results = self.executor.execute(
+            input_text,
+            plan,
+            agent=self,
+            max_steps=self.max_steps,
+            **kwargs
+        )
+
+        logger.info(f"\n--- 任务完成 ---\n最终答案: {final_answer}")
+
+        # 添加最终答案
+        self.add_message(Message("assistant", f"**最终答案**: {final_answer}"))
+
         return final_answer
 
-
-# 示例用法
-if __name__ == "__main__":
-    from dotenv import load_dotenv
-
-    load_dotenv()
-
-    # 创建LLM客户端
-    llm_client = HelloAgentsLLM()
-    
-    # 创建PlanAndSolveAgent实例
-    agent = PlanAndSolveAgent(
-        name="数学问题解决助手",
-        llm=llm_client
-    )
-    
-    # 示例问题
-    question = "一个水果店周一卖出了15个苹果。周二卖出的苹果数量是周一的两倍。周三卖出的数量比周二少了5个。请问这三天总共卖出了多少个苹果？"
-    
-    # 运行Agent解决问题
-    answer = agent.run(question)
-    print(f"\n最终答案: {answer}")
