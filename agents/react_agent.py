@@ -1,13 +1,19 @@
 import json
 import logging
 import re
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any
 from core.agent import Agent
 from core.llm import HelloAgentsLLM
 from core.message import Message
 from tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
+
+# 预编译正则表达式以提高性能
+_THOUGHT_PATTERN = re.compile(r"\*\*Thought:\*\*(.*)", re.IGNORECASE)
+_ACTION_PATTERN = re.compile(r"\*\*Action:\*\*(.*)", re.IGNORECASE)
+_TOOL_PATTERN = re.compile(r"([a-zA-Z0-9_-]+)\[(.*?)\]")  # 非贪婪匹配，支持连字符工具名
+_FINISH_ACTION = "Finish"
 
 # 默认系统提示词 - 定义Agent角色和ReAct规则
 DEFAULT_SYSTEM_PROMPT = """你是一个具备推理和行动能力的AI助手。你可以通过思考分析问题，然后调用合适的工具来获取信息，最终给出准确的答案。
@@ -142,13 +148,9 @@ class ReActAgent(Agent):
             self.add_message(Message("assistant", response_text))
 
             # 检查是否完成
-            if action.startswith("Finish"):
+            if action.startswith(_FINISH_ACTION):
                 final_answer = self._parse_action_input(action)
                 logger.info(f"🎉 最终答案: {final_answer}")
-
-                # 添加最终结果到历史
-                self.add_message(Message("assistant", final_answer))
-
                 return final_answer
 
             # 执行工具调用
@@ -177,35 +179,34 @@ class ReActAgent(Agent):
     
     def _parse_output(self, text: str) -> Tuple[Optional[str], Optional[str]]:
         """解析LLM输出，提取思考和行动"""
-        # 匹配Thought和Action，忽略前面的星号
-        thought_match = re.search(r"Thought:(.*)", text)
-        action_match = re.search(r"Action:(.*)", text)
-        
+        thought_match = _THOUGHT_PATTERN.search(text)
+        action_match = _ACTION_PATTERN.search(text)
+
         thought = thought_match.group(1).strip() if thought_match else None
         action = action_match.group(1).strip() if action_match else None
-        
-        # 移除可能存在的前导星号和空格
+
+        # 清理可能的前导星号和空格
         if thought:
             thought = thought.lstrip("* ").strip()
         if action:
             action = action.lstrip("* ").strip()
-        
+
         return thought, action
     
     def _parse_action(self, action_text: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
         """解析行动文本，提取工具名称和输入参数
-        
+
         Args:
             action_text: 行动文本，格式为 tool_name[json_params]
-            
+
         Returns:
             Tuple[工具名称, 参数字典]
         """
-        match = re.match(r"(\w+)\[(.*)\]", action_text)
+        match = _TOOL_PATTERN.match(action_text)
         if match:
             tool_name = match.group(1)
             params_str = match.group(2)
-            
+
             try:
                 # 尝试解析JSON格式的参数
                 params = json.loads(params_str)
@@ -217,11 +218,11 @@ class ReActAgent(Agent):
             except (json.JSONDecodeError, ValueError):
                 # 如果JSON解析失败，将整个参数字符串作为input参数
                 return tool_name, {"input": params_str}
-        
+
         return None, None
-    
+
     def _parse_action_input(self, action_text: str) -> str:
         """解析行动输入"""
-        match = re.match(r"\w+\[(.*)\]", action_text)
-        return match.group(1) if match else ""
+        match = _TOOL_PATTERN.match(action_text)
+        return match.group(2) if match else ""
 
