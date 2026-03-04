@@ -3,7 +3,7 @@ import logging
 import re
 from typing import Optional, Tuple, Dict, Any
 from core.agent import Agent
-from core.llm import HelloAgentsLLM
+from core.llm import LLMClient
 from tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ class ReActAgent(Agent):
     def __init__(
         self,
         name: str,
-        llm: HelloAgentsLLM,
+        llm: LLMClient,
         tool_registry: ToolRegistry,
         system_prompt: Optional[str] = None,
         custom_prompt: Optional[str] = None,

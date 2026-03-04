@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 import logging
 from dotenv import load_dotenv
 from agents.plan_solve_agent import PlanAndSolveAgent
-from core.llm import HelloAgentsLLM
+from core.llm import LLMClient
 from utils.logging import configure_logging
 
 configure_logging()
@@ -19,7 +19,7 @@ def test_plan_solve_agent():
 
     try:
         logger.info("正在初始化 LLM 客户端...")
-        llm_client = HelloAgentsLLM()
+        llm_client = LLMClient()
         logger.info("LLM 客户端初始化成功")
 
         logger.info("正在创建 PlanAndSolveAgent...")

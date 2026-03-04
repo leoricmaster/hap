@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional
-from .llm import HelloAgentsLLM
+from .llm import LLMClient
 
 class Agent(ABC):
     """Agent基类"""
@@ -8,7 +8,7 @@ class Agent(ABC):
     def __init__(
         self,
         name: str,
-        llm: HelloAgentsLLM,
+        llm: LLMClient,
         system_prompt: Optional[str] = None
     ):
         self.name = name

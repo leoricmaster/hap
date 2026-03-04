@@ -1,4 +1,4 @@
-from typing import Optional, Any, Callable, Dict
+from typing import Optional, Any, Dict
 from .base import Tool
 
 class ToolRegistry:
@@ -36,7 +36,7 @@ class ToolRegistry:
 
     def get_tools_description(self) -> str:
         """
-        获取所有可用工具的格式化描述字符串
+        获取所有可用工具的格式化描述字符串，包含参数定义
 
         Returns:
             工具描述字符串，用于构建提示词
@@ -44,9 +44,42 @@ class ToolRegistry:
         descriptions = []
 
         for tool in self._tools.values():
-            descriptions.append(f"- {tool.name}: {tool.description}")
+            # 基础描述
+            tool_desc = f"### {tool.name}\n{tool.description}"
 
-        return "\n".join(descriptions) if descriptions else "暂无可用工具"
+            # 添加参数信息
+            params = tool.get_parameters()
+            if params:
+                tool_desc += "\n参数："
+                for param in params:
+                    required_mark = "（必填）" if param.required else "（可选）"
+                    default_info = f"，默认值：{param.default}" if param.default is not None else ""
+                    tool_desc += f"\n  - {param.name}: {param.type}{required_mark} - {param.description}{default_info}"
+            else:
+                tool_desc += "\n参数：无"
+
+            # 添加使用示例
+            if params:
+                example_params = []
+                for param in params:
+                    # 优先级：example > default > type推断
+                    if param.example is not None:
+                        value = param.example
+                    elif param.default is not None:
+                        value = param.default
+                    elif param.type == "number":
+                        value = 123
+                    elif param.type == "string":
+                        value = "示例文本"
+                    else:
+                        value = "value"
+                    example_params.append(f"{param.name}={value}")
+                example = f"[TOOL_CALL:{tool.name}:{','.join(example_params)}]"
+                tool_desc += f"\n使用示例：{example}"
+
+            descriptions.append(tool_desc)
+
+        return "\n\n".join(descriptions) if descriptions else "暂无可用工具"
 
     def execute_tool(self, tool_name: str, input_json: Dict[str, Any]) -> str:
         """

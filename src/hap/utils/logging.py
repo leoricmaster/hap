@@ -21,8 +21,7 @@ def configure_logging(
 
     handler = logging.StreamHandler(sys.stdout)
     formatter = logging.Formatter(
-        format_string or
-        '%(asctime)s - %(name)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s'
+        format_string or '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
     )
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)

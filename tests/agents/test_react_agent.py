@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 import logging
 from dotenv import load_dotenv
 from agents.react_agent import ReActAgent
-from core.llm import HelloAgentsLLM
+from core.llm import LLMClient
 from tools.registry import ToolRegistry
 from tools.builtin.search import SearchTool
 from tools.builtin.calculator import CalculatorTool
@@ -22,7 +22,7 @@ def test_react_agent():
 
     try:
         logger.info("正在初始化 LLM 客户端...")
-        llm = HelloAgentsLLM()
+        llm = LLMClient()
         logger.info("LLM 客户端初始化成功")
 
         logger.info("正在注册工具...")

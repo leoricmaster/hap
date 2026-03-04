@@ -10,6 +10,7 @@ class ToolParameter(BaseModel):
     description: str
     required: bool = True
     default: Any = None
+    example: Any = None
 
 
 class Tool(ABC):

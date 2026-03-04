@@ -1,9 +1,7 @@
-"""简单Agent实现 - 基于OpenAI原生API"""
-
 from typing import Optional, Iterator, TYPE_CHECKING
 import re
 from ..core.agent import Agent
-from ..core.llm import HelloAgentsLLM
+from ..core.llm import LLMClient
 
 if TYPE_CHECKING:
     from ..tools.registry import ToolRegistry
@@ -14,7 +12,7 @@ class SimpleAgent(Agent):
     def __init__(
         self,
         name: str,
-        llm: HelloAgentsLLM,
+        llm: LLMClient,
         system_prompt: Optional[str] = None,
         tool_registry: Optional['ToolRegistry'] = None,
         enable_tool_calling: bool = True
@@ -245,34 +243,89 @@ class SimpleAgent(Agent):
         """检查是否有可用工具"""
         return self.enable_tool_calling and self.tool_registry is not None
 
-    def stream_run(self, input_text: str, **kwargs) -> Iterator[str]:
+    def stream_run(self, input_text: str, max_tool_iterations: int = 3, **kwargs) -> Iterator[str]:
         """
-        流式运行Agent
-        
+        流式运行Agent，支持工具调用
+
         Args:
             input_text: 用户输入
+            max_tool_iterations: 最大工具调用迭代次数
             **kwargs: 其他参数
-            
+
         Yields:
             Agent响应片段
         """
         # 构建消息列表
         messages = []
-        
-        if self.system_prompt:
-            messages.append({"role": "system", "content": self.system_prompt})
-        
+
+        # 使用增强的系统提示词（包含工具信息）
+        enhanced_system_prompt = self._get_enhanced_system_prompt()
+        messages.append({"role": "system", "content": enhanced_system_prompt})
+
         for msg in self._history:
             messages.append(msg)
-        
+
         messages.append({"role": "user", "content": input_text})
-        
-        # 流式调用LLM
-        full_response = ""
-        for chunk in self.llm.stream_invoke(messages, **kwargs):
-            full_response += chunk
-            yield chunk
-        
-        # 保存完整对话到历史记录
+
+        # 如果没有启用工具调用，使用简单流式逻辑
+        if not self.enable_tool_calling:
+            full_response = ""
+            for chunk in self.llm.stream_invoke(messages, **kwargs):
+                full_response += chunk
+                yield chunk
+            self.add_message("user", input_text)
+            self.add_message("assistant", full_response)
+            return
+
+        # 迭代处理，支持多轮工具调用
+        current_iteration = 0
+        final_response = ""
+        accumulated_content = ""
+
+        while current_iteration < max_tool_iterations:
+            # 流式调用LLM
+            full_response = ""
+            for chunk in self.llm.stream_invoke(messages, **kwargs):
+                full_response += chunk
+                accumulated_content += chunk
+                yield chunk
+
+            # 检查是否有工具调用
+            tool_calls = self._parse_tool_calls(full_response)
+
+            if tool_calls:
+                # 执行所有工具调用并收集结果
+                tool_results = []
+
+                for call in tool_calls:
+                    result = self._execute_tool_call(call['tool_name'], call['parameters'])
+                    tool_results.append(result)
+
+                # 构建包含工具结果的消息
+                messages.append({"role": "assistant", "content": full_response})
+
+                # 添加工具结果作为系统消息
+                tool_results_text = "\n\n".join(tool_results)
+                messages.append({"role": "user", "content": f"工具执行结果：\n{tool_results_text}\n\n请基于这些结果给出完整的回答。"})
+
+                # 输出工具执行完成的标记
+                yield f"\n\n[已执行 {len(tool_calls)} 个工具，处理结果中...]\n\n"
+                accumulated_content += f"\n\n[已执行 {len(tool_calls)} 个工具，处理结果中...]\n\n"
+
+                current_iteration += 1
+                continue
+
+            # 没有工具调用，这是最终回答
+            final_response = full_response
+            break
+
+        # 如果超过最大迭代次数，获取最后一次回答
+        if current_iteration >= max_tool_iterations and not final_response:
+            for chunk in self.llm.stream_invoke(messages, **kwargs):
+                final_response += chunk
+                accumulated_content += chunk
+                yield chunk
+
+        # 保存到历史记录
         self.add_message("user", input_text)
-        self.add_message("assistant", full_response)
+        self.add_message("assistant", accumulated_content)
