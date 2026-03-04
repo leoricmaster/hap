@@ -15,10 +15,20 @@ class Agent(ABC):
         self.llm = llm
         self.system_prompt = system_prompt
         self._history: list[dict] = []
+        if system_prompt:
+            self._history.append({"role": "system", "content": system_prompt})
 
     @abstractmethod
     def run(self, input_text: str, **kwargs) -> str:
-        """运行Agent"""
+        """运行Agent
+
+        Args:
+            input_text: 用户输入
+            **kwargs: 透传给 LLM 的参数，如 temperature, max_tokens
+
+        Returns:
+            Agent 的响应文本
+        """
         pass
 
     def add_message(self, role: str, content: str):
