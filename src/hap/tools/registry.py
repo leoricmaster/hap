@@ -110,13 +110,13 @@ class ToolRegistry:
 # 示例函数
 def demo_tool_usage():
     """演示工具的使用"""
-    from .builtin.search import SearchTool
+    from .builtin.search import WebSearch
     from .builtin.calculator import CalculatorTool
     from dotenv import load_dotenv
     load_dotenv()
 
     registry = ToolRegistry()
-    registry.register_tool(SearchTool())
+    registry.register_tool(WebSearch())
     registry.register_tool(CalculatorTool())
 
     # 单参数工具示例

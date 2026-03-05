@@ -3,7 +3,7 @@ import time
 import logging
 from openai import OpenAI
 from typing import Optional, Iterator
-from .exceptions import LLMException, LLMConfigException
+from hap.core.exceptions import LLMException, LLMConfigException
 
 logger = logging.getLogger(__name__)
 

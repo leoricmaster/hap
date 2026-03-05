@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from agents.react_agent import ReActAgent
 from core.llm import LLMClient
 from tools.registry import ToolRegistry
-from tools.builtin.search import SearchTool
+from tools.builtin.search import WebSearch
 from tools.builtin.calculator import CalculatorTool
 from utils.logging import configure_logging
 
@@ -27,7 +27,7 @@ def test_react_agent():
 
         logger.info("正在注册工具...")
         tool_registry = ToolRegistry()
-        tool_registry.register_tool(SearchTool())
+        tool_registry.register_tool(WebSearch())
         tool_registry.register_tool(CalculatorTool())
         logger.info("工具注册成功")
 
