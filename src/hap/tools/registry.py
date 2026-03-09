@@ -110,7 +110,7 @@ class ToolRegistry:
 # 示例函数
 def demo_tool_usage():
     """演示工具的使用"""
-    from .builtin.search import WebSearch
+    from .builtin.web_search import WebSearch
     from .builtin.calculator import CalculatorTool
     from dotenv import load_dotenv
     load_dotenv()
