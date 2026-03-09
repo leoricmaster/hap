@@ -1,96 +1,153 @@
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 from .base import Tool
+
 
 class ToolRegistry:
     """
-    提供工具的注册、管理和执行功能。
+    Bridge between Agent and Tools.
+
+    Provides tool registration, management, and execution capabilities.
+    Acts as a central registry that agents use to discover and invoke tools.
     """
 
     def __init__(self):
         self._tools: Dict[str, Tool] = {}
 
-    def register_tool(self, tool: Tool):
+    def register_tool(self, tool: Tool) -> "ToolRegistry":
         """
-        注册Tool对象
+        Register a tool.
 
         Args:
-            tool: Tool实例
+            tool: Tool instance to register
+
+        Returns:
+            Self for method chaining
         """
         if tool.name in self._tools:
-            print(f"⚠️ 警告：工具 '{tool.name}' 已存在，将被覆盖。")
+            print(f"Warning: Tool '{tool.name}' already exists and will be overwritten.")
 
         self._tools[tool.name] = tool
-        print(f"✅ 工具 '{tool.name}' 已注册。")
+        print(f"Tool '{tool.name}' registered.")
+        return self
 
-    def unregister_tool(self, name: str):
-        """注销工具"""
+    def register_tools(self, *tools: Tool) -> "ToolRegistry":
+        """
+        Register multiple tools at once.
+
+        Args:
+            *tools: Tool instances to register
+
+        Returns:
+            Self for method chaining
+
+        Example:
+            registry = ToolRegistry()
+            registry.register_tools(WebSearch(), BashTool(), PythonREPL())
+        """
+        for tool in tools:
+            self.register_tool(tool)
+        return self
+
+    def unregister_tool(self, name: str) -> bool:
+        """
+        Unregister a tool.
+
+        Args:
+            name: Tool name to unregister
+
+        Returns:
+            True if tool was found and removed, False otherwise
+        """
         if name in self._tools:
             del self._tools[name]
-            print(f"🗑️ 工具 '{name}' 已注销。")
+            print(f"Tool '{name}' unregistered.")
+            return True
         else:
-            print(f"⚠️ 工具 '{name}' 不存在。")
+            print(f"Warning: Tool '{name}' does not exist.")
+            return False
 
     def get_tool(self, name: str) -> Optional[Tool]:
-        """获取Tool对象"""
+        """
+        Get a tool by name.
+
+        Args:
+            name: Tool name
+
+        Returns:
+            Tool instance or None if not found
+        """
         return self._tools.get(name)
+
+    def list_tools(self) -> List[str]:
+        """
+        Get list of all registered tool names.
+
+        Returns:
+            List of tool names
+        """
+        return list(self._tools.keys())
+
+    def has_tool(self, name: str) -> bool:
+        """
+        Check if a tool is registered.
+
+        Args:
+            name: Tool name to check
+
+        Returns:
+            True if tool exists, False otherwise
+        """
+        return name in self._tools
 
     def get_tools_description(self) -> str:
         """
-        获取所有可用工具的格式化描述字符串
+        Get formatted description of all available tools.
 
         Returns:
-            工具描述字符串，用于构建提示词
+            Tool descriptions string for building prompts
         """
         descriptions = [tool.get_description() for tool in self._tools.values()]
-        return "\n\n".join(descriptions) if descriptions else "暂无可用工具"
+        return "\n\n".join(descriptions) if descriptions else "No tools available"
 
-    def execute_tool(self, tool_name: str, input_json: Dict[str, Any]) -> str:
+    def execute_tool(self, tool_name: str, parameters: Dict[str, Any]) -> str:
         """
-        执行工具
+        Execute a tool by name.
 
         Args:
-            name: 工具名称
-            input_params: 输入参数字典
+            tool_name: Name of the tool to execute
+            parameters: Tool parameters dictionary
 
         Returns:
-            工具执行结果
+            Tool execution result
         """
-        if tool_name in self._tools:
-            tool = self._tools[tool_name]
-            try:
-                return tool.run(input_json)
-            except Exception as e:
-                return f"错误：执行工具 '{tool_name}' 时发生异常: {str(e)}"
-        else:
-            return f"错误：未找到名为 '{tool_name}' 的工具。"
+        if tool_name not in self._tools:
+            return f"Error: Tool '{tool_name}' not found."
 
-    def clear(self):
-        """清空所有工具"""
+        tool = self._tools[tool_name]
+        try:
+            return tool.run(parameters)
+        except Exception as e:
+            return f"Error: Exception occurred while executing tool '{tool_name}': {str(e)}"
+
+    def clear(self) -> "ToolRegistry":
+        """
+        Clear all registered tools.
+
+        Returns:
+            Self for method chaining
+        """
         self._tools.clear()
-        print("🧹 所有工具已清空。")
+        print("All tools cleared.")
+        return self
 
+    def __len__(self) -> int:
+        """Return number of registered tools."""
+        return len(self._tools)
 
-# 示例函数
-def demo_tool_usage():
-    """演示工具的使用"""
-    from .builtin.web_search import WebSearch
-    from .builtin.calculator import CalculatorTool
-    from dotenv import load_dotenv
-    load_dotenv()
+    def __contains__(self, name: str) -> bool:
+        """Check if tool name is registered."""
+        return name in self._tools
 
-    registry = ToolRegistry()
-    registry.register_tool(WebSearch())
-    registry.register_tool(CalculatorTool())
-
-    # 单参数工具示例
-    result = registry.execute_tool("search", {"input": "英伟达最新的GPU型号是什么"})
-    print("\n🔍 中文搜索结果:")
-    print(result[:100] + "..." if len(result) > 100 else result)
-    
-    # 多参数工具示例
-    result = registry.execute_tool("calculator", {"a": 15, "b": 3, "operation": "divide"})
-    print("\n🧮 计算器结果:")
-    print(result)
-
-if __name__ == "__main__":
-    demo_tool_usage()
+    def __iter__(self):
+        """Iterate over registered tools."""
+        return iter(self._tools.values())
