@@ -95,8 +95,18 @@ def test_web_search_missing_parameter():
         raise
 
 
+def test_web_search_description():
+    """Test tool description generation"""
+    search_tool = WebSearch()
+    desc = search_tool.get_description()
+
+    assert "search" in desc
+    assert "query" in desc
+    assert "TOOL_CALL:search" in desc
+    print(f"\nTool description:\n{desc}")
+
+
 def test_web_search_custom_results_count():
-    """Test web search with custom max_results"""
     try:
         logger.info("Testing custom max_results...")
         search_tool = WebSearch(max_results=3)
@@ -115,6 +125,15 @@ def test_web_search_custom_results_count():
         traceback.print_exc()
         raise
 
+
+def test_web_search_example():
+    """Test tool example generation"""
+    search_tool = WebSearch()
+    example = search_tool.get_example()
+
+    assert example.startswith("[TOOL_CALL:search:")
+    assert "query=" in example
+    print(f"\nTool example: {example}")
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
@@ -138,6 +157,16 @@ if __name__ == '__main__':
     print("Test 4: Custom results count")
     print("=" * 80)
     test_web_search_custom_results_count()
+
+    print("\n" + "=" * 80)
+    print("Test 5: Tool description generation")
+    print("=" * 80)
+    test_web_search_description()
+
+    print("\n" + "=" * 80)
+    print("Test 6: Tool example generation")
+    print("=" * 80)
+    test_web_search_example()
 
     print("\n" + "=" * 80)
     print("All tests passed!")
