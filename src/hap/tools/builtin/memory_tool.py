@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-from tools.base import Tool, ToolParameter
-from memory import MemoryManager, MemoryConfig
+from ..base import Tool, ToolParameter
+from hap.memory import MemoryManager, MemoryConfig
 
 
 class MemoryTool(Tool):

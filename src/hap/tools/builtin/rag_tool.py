@@ -23,9 +23,9 @@ from typing import Dict, Any, List, Optional, cast
 import os
 import time
 
-from tools.base import Tool, ToolParameter
-from memory.rag.pipeline import create_rag_pipeline
-from core.llm import LLMClient
+from ..base import Tool, ToolParameter
+from hap.memory.rag.pipeline import create_rag_pipeline
+from hap.core.llm import LLMClient
 
 class RAGTool(Tool):
     """RAG工具

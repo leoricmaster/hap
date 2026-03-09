@@ -1,5 +1,5 @@
 from typing import Any, List, Dict
-from tools.base import Tool, ToolParameter
+from ..base import Tool, ToolParameter
 
 
 class CalculatorTool(Tool):
