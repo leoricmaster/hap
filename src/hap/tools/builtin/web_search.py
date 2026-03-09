@@ -53,12 +53,12 @@ class WebSearch(Tool):
             )
         ]
 
-    def run(self, parameters: Dict[str, Any]) -> str:
+    def _execute(self, parameters: Dict[str, Any]) -> str:
         """
         Execute search.
 
         Args:
-            parameters: Dictionary containing query parameter
+            parameters: Dictionary containing query parameter (already validated)
 
         Returns:
             Search results
@@ -66,11 +66,6 @@ class WebSearch(Tool):
         Raises:
             ToolException: Search execution failed
         """
-        if not self._validate_parameters(parameters):
-            missing = [p.name for p in self.get_parameters() if p.required and p.name not in parameters]
-            logger.warning(f"Missing required parameters: {missing}")
-            raise ToolException(f"Missing required parameters: {', '.join(missing)}")
-
         query = parameters.get("query", "").strip()
         if not query:
             logger.warning("Search query is empty")

@@ -8,7 +8,6 @@ sys.path.insert(0, str(_project_root / "src"))
 
 # Direct import to avoid loading other problematic modules
 from hap.tools.builtin.web_search import WebSearch
-from hap.core.exceptions import ToolException
 
 from dotenv import load_dotenv
 
@@ -107,6 +106,7 @@ def test_web_search_description():
 
 
 def test_web_search_custom_results_count():
+    """Test web search with custom max_results"""
     try:
         logger.info("Testing custom max_results...")
         search_tool = WebSearch(max_results=3)

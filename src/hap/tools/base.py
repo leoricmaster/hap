@@ -25,22 +25,42 @@ class Tool(ABC):
         """获取工具参数定义"""
         pass
 
-    @abstractmethod
     def run(self, parameters: Dict[str, Any]) -> Any:
-        """执行工具
+        """
+        执行工具
 
-        实现提示：建议在方法开头调用 self._validate_parameters(parameters) 验证参数
+        1. 验证参数
+        2. 调用子类实现的 _execute 执行具体逻辑
 
         Args:
             parameters: 工具参数字典
 
         Returns:
+            工具执行结果
+        """
+        # 参数验证
+        missing = [p.name for p in self.get_parameters() if p.required and p.name not in parameters]
+        if missing:
+            return f"Error: Missing required parameters: {', '.join(missing)}"
+
+        # 执行具体逻辑
+        return self._execute(parameters)
+
+    @abstractmethod
+    def _execute(self, parameters: Dict[str, Any]) -> Any:
+        """
+        执行工具具体逻辑（子类必须实现）
+
+        Args:
+            parameters: 已验证的工具参数字典
+
+        Returns:
             工具执行结果任意类型
         """
         pass
-    
+
     def _validate_parameters(self, parameters: Dict[str, Any]) -> bool:
-        """验证参数（私有方法，子类可在 run 中调用）"""
+        """验证参数（私有方法，子类可在 _execute 中调用）"""
         required_params = [p.name for p in self.get_parameters() if p.required]
         return all(param in parameters for param in required_params)
 
