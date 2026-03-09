@@ -1,6 +1,11 @@
+import json
 from abc import ABC, abstractmethod
 from typing import Any, List, Dict
 from pydantic import BaseModel
+
+
+# Sentinel object to detect if default was provided
+_UNSET = object()
 
 
 class ToolParameter(BaseModel):
@@ -9,8 +14,8 @@ class ToolParameter(BaseModel):
     type: str
     description: str
     required: bool = True
-    default: Any = None
-    example: Any = None
+    default: Any = _UNSET
+    example: Any = _UNSET
 
 
 class Tool(ABC):
@@ -78,11 +83,10 @@ class Tool(ABC):
             lines.append("Parameters:")
             for param in params:
                 required_mark = " (required)" if param.required else " (optional)"
-                default_info = f", default: {param.default}" if param.default is not None else ""
+                default_info = f", default: {param.default}" if param.default is not _UNSET else ""
                 lines.append(f"  - {param.name}: {param.type}{required_mark} - {param.description}{default_info}")
 
-            example = self.get_example()
-            lines.append(f"Example: {example}")
+            lines.append(f"Example: {self.get_example()}")
         else:
             lines.append("Parameters: none")
 
@@ -93,17 +97,17 @@ class Tool(ABC):
         Generate tool usage example.
 
         Returns:
-            Example string in format [TOOL_CALL:tool_name:param1=value1,...]
+            Example string in format tool_name[{"param1": "value1", ...}]
         """
         params = self.get_parameters()
         if not params:
-            return f"[TOOL_CALL:{self.name}]"
+            return f"{self.name}[]"
 
-        example_params = []
+        example_params = {}
         for param in params:
-            if param.example is not None:
+            if param.example is not _UNSET:
                 value = param.example
-            elif param.default is not None:
+            elif param.default is not _UNSET:
                 value = param.default
             elif param.type == "number":
                 value = 123
@@ -111,9 +115,9 @@ class Tool(ABC):
                 value = "example text"
             else:
                 value = "value"
-            example_params.append(f"{param.name}={value}")
+            example_params[param.name] = value
 
-        return f"[TOOL_CALL:{self.name}:{','.join(example_params)}]"
+        return f"{self.name}[{json.dumps(example_params, ensure_ascii=False)}]"
 
     def __str__(self) -> str:
         return f"Tool(name={self.name})"

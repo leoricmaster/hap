@@ -1,22 +1,24 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, List, Dict
 from .llm import LLMClient
+from hap.tools.registry import ToolRegistry
+
 
 class Agent(ABC):
-    """Agent基类"""
+    """Agent base class with optional tool support."""
 
     def __init__(
         self,
         name: str,
         llm: LLMClient,
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
+        tool_registry: Optional[ToolRegistry] = None
     ):
-        self.name = name
-        self.llm = llm
-        self.system_prompt = system_prompt
-        self._history: list[dict] = []
-        if system_prompt:
-            self._history.append({"role": "system", "content": system_prompt})
+        self._name = name
+        self._llm = llm
+        self._system_prompt = system_prompt
+        self._tool_registry = tool_registry
+        self._history: List[Dict[str, str]] = []
 
     @abstractmethod
     def run(self, input_text: str, **kwargs) -> str:
@@ -39,12 +41,12 @@ class Agent(ABC):
         """清空历史记录"""
         self._history.clear()
 
-    def get_history(self) -> list[dict]:
+    def get_history(self) -> List[Dict[str, str]]:
         """获取历史记录"""
         return self._history.copy()
 
     def __str__(self) -> str:
-        return f"Agent(name={self.name})"
-    
+        return f"Agent(name={self._name})"
+
     def __repr__(self) -> str:
         return self.__str__()

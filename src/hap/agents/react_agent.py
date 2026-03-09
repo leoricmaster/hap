@@ -2,68 +2,71 @@ import json
 import logging
 import re
 from typing import Optional, Tuple, Dict, Any
-from core.agent import Agent
-from core.llm import LLMClient
-from tools.registry import ToolRegistry
+from hap.core.agent import Agent
+from hap.core.llm import LLMClient
+from hap.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
-# 预编译正则表达式以提高性能
-_THOUGHT_PATTERN = re.compile(r"\*\*Thought:\*\*(.*)", re.IGNORECASE)
-_ACTION_PATTERN = re.compile(r"\*\*Action:\*\*(.*)", re.IGNORECASE)
-_TOOL_PATTERN = re.compile(r"([a-zA-Z0-9_-]+)\[(.*?)\]")  # 非贪婪匹配，支持连字符工具名
+# Pre-compiled regex patterns for performance
+_THOUGHT_PATTERN = re.compile(r"\*\*Thought:\*\*\s*(.*?)(?=\*\*Action:\*\*|$)", re.IGNORECASE | re.DOTALL)
+_ACTION_PATTERN = re.compile(r"\*\*Action:\*\*\s*(.*?)(?=\*\*|$)", re.IGNORECASE | re.DOTALL)
+_TOOL_PATTERN = re.compile(r"([a-zA-Z0-9_-]+)\[(.*?)\]")  # Non-greedy, supports hyphenated tool names
 _FINISH_ACTION = "Finish"
 
-# 默认系统提示词 - 定义Agent角色和ReAct规则
-DEFAULT_SYSTEM_PROMPT = """你是一个具备推理和行动能力的AI助手。你可以通过思考分析问题，然后调用合适的工具来获取信息，最终给出准确的答案。
+# Default system prompt - defines Agent role and ReAct rules
+DEFAULT_SYSTEM_PROMPT = """You are an AI assistant with reasoning and action capabilities. You can analyze problems, invoke appropriate tools to gather information, and provide accurate answers.
 
-## 工作流程
-请严格按照以下格式进行回应，每次只能执行一个步骤：
+## Workflow
+Please respond strictly in the following format, one step at a time:
 
-**Thought:** 分析当前问题，思考需要采取什么行动。
-**Action:** 选择一个行动，格式必须是以下之一：
-- `{{tool_name}}[{{input_json}}]` - 调用指定工具，其中input_json是JSON格式的工具参数
-- `Finish[最终答案]` - 当你有足够信息给出最终答案时
+**Thought:** Analyze the current problem and determine what action to take.
+**Action:** Choose an action, which must be one of:
+- `{{tool_name}}[{{input_json}}]` - Call a specific tool, where input_json is a JSON-formatted parameter object
+- `Finish[final answer]` - When you have enough information to provide the final answer
 
-## 重要提醒
-1. 每次回应必须包含Thought和Action两部分
-2. 工具调用的格式必须严格遵循：工具名[JSON格式的参数]
-3. 只有当你确信有足够信息回答问题时，才使用Finish
-4. 如果工具返回的信息不够，继续使用其他工具或相同工具的不同参数
+## Important Notes
+1. Each response must include both Thought and Action
+2. Tool call format must strictly follow: tool_name[JSON parameters]
+3. Only use Finish when you are confident you can answer the question
+4. If tool results are insufficient, continue using other tools or different parameters
 
-## 示例
-- 搜索工具：`search[{{"query": "Python编程语言的特点"}}]`
-- 计算器工具：`calculator[{{"a": 10, "b": 5, "operation": "add"}}]`
+## Examples
+- Search tool: `search[{"query": "Characteristics of Python programming language"}]`
+- Calculator tool: `calculator[{"a": 10, "b": 5, "operation": "add"}]`
 
-## 注意事项
-- JSON参数中的键值对必须用逗号分隔
-- 字符串值必须用双引号包围
-- 数字值不需要引号
+## Formatting Tips
+- Key-value pairs in JSON must be separated by commas
+- String values must be enclosed in double quotes
+- Numeric values do not need quotes
 
-当收到 Observation 时，请基于新的信息继续推理和行动。"""
+When receiving an Observation, continue reasoning and acting based on the new information."""
 
-# 默认ReAct提示词模板（用于首次用户消息）
-DEFAULT_REACT_PROMPT = """## 可用工具
+# Default ReAct prompt template (for first user message)
+DEFAULT_REACT_PROMPT = """## Available Tools
 {tools}
 
-## 当前任务
+## Current Task
 **Question:** {question}
 
-请开始你的推理和行动："""
+Please begin your reasoning and action:"""
 
 class ReActAgent(Agent):
     """
     ReAct (Reasoning and Acting) Agent
-    
-    结合推理和行动的智能体，能够：
-    1. 分析问题并制定行动计划
-    2. 调用外部工具获取信息
-    3. 基于观察结果进行推理
-    4. 迭代执行直到得出最终答案
-    
-    这是一个经典的Agent范式，特别适合需要外部信息的任务。
+
+    An agent that combines reasoning and action capabilities:
+    1. Analyzes problems and formulates action plans
+    2. Invokes external tools to gather information
+    3. Reasons based on observation results
+    4. Iterates until reaching a final answer
+
+    This is a classic agent paradigm, particularly suitable for tasks requiring external information.
     """
-    
+
+    # Override base class attribute to be non-optional
+    _tool_registry: ToolRegistry
+
     def __init__(
         self,
         name: str,
@@ -74,48 +77,47 @@ class ReActAgent(Agent):
         max_steps: int = 5
     ):
         """
-        初始化ReActAgent
+        Initialize ReActAgent
 
         Args:
-            name: Agent名称
-            llm: LLM实例
-            tool_registry: 工具注册表
-            system_prompt: 系统提示词
-            custom_prompt: 自定义提示词模板
-            max_steps: 最大执行步数
+            name: Agent name
+            llm: LLM client instance
+            tool_registry: Tool registry for tool management
+            system_prompt: System prompt (optional, uses default if not provided)
+            custom_prompt: Custom prompt template (optional)
+            max_steps: Maximum execution steps
         """
-        super().__init__(name, llm, system_prompt)
-        self._tool_registry = tool_registry
+        super().__init__(name, llm, system_prompt, tool_registry)
         self._max_steps = max_steps
 
-        # 设置提示词模板：用户自定义优先，否则使用默认模板
-        self.prompt_template = custom_prompt if custom_prompt else DEFAULT_REACT_PROMPT
-    
+        # Use custom prompt if provided, otherwise use default
+        self._prompt_template = custom_prompt if custom_prompt else DEFAULT_REACT_PROMPT
+
     def run(self, input_text: str, **kwargs) -> str:
         """
-        运行ReAct Agent
+        Run ReAct Agent
 
         Args:
-            input_text: 用户问题
-            **kwargs: 其他参数
+            input_text: User question
+            **kwargs: Additional parameters passed to LLM
 
         Returns:
-            最终答案
+            Final answer
         """
         current_step = 0
 
-        logger.info(f"\n🤖 {self.name} 开始处理问题: {input_text}")
+        logger.info(f"\n🤖 {self._name} processing: {input_text}")
 
-        # 清空历史，开始新的对话
+        # Clear history for new conversation
         self.clear_history()
 
-        # 1. 添加系统提示词（用户自定义或默认）
-        system_content = self.system_prompt if self.system_prompt else DEFAULT_SYSTEM_PROMPT
+        # 1. Add system prompt (custom or default)
+        system_content = self._system_prompt if self._system_prompt else DEFAULT_SYSTEM_PROMPT
         self.add_message("system", system_content)
 
-        # 2. 添加首次用户消息（包含工具描述和具体问题）
+        # 2. Add first user message (with tool descriptions and specific question)
         tools_desc = self._tool_registry.get_tools_description()
-        initial_prompt = self.prompt_template.format(
+        initial_prompt = self._prompt_template.format(
             tools=tools_desc,
             question=input_text
         )
@@ -123,83 +125,84 @@ class ReActAgent(Agent):
 
         while current_step < self._max_steps:
             current_step += 1
-            logger.info(f"\n--- 第 {current_step} 步 ---")
+            logger.info(f"\n--- Step {current_step} ---")
 
-            # 从 self._history 构建 messages 传给 LLM
+            # Build messages from history for LLM
             messages = [m for m in self._history]
-            response_text = self.llm.invoke(messages, **kwargs)
+            response_text = self._llm.invoke(messages, **kwargs)
 
             if not response_text:
-                logger.error("❌ 错误：LLM未能返回有效响应。")
+                logger.error("Error: LLM returned no valid response.")
                 break
 
-            # 解析输出
+            # Parse output
             thought, action = self._parse_output(response_text)
 
             if thought:
-                logger.info(f"🤔 思考: {thought}")
+                logger.info(f"🤔 Thought: {thought}")
 
             if not action:
-                logger.warning("⚠️ 警告：未能解析出有效的Action，流程终止。")
+                logger.warning("Warning: No valid Action parsed, terminating.")
                 break
 
-            # 添加助手的回复到历史
+            # Add assistant response to history
             self.add_message("assistant", response_text)
 
-            # 检查是否完成
-            if action.startswith(_FINISH_ACTION):
+            # Check if finished
+            if action.strip().startswith(_FINISH_ACTION):
                 final_answer = self._parse_action_input(action)
-                logger.info(f"🎉 最终答案: {final_answer}")
+                logger.info(f"🎉 Final answer: {final_answer}")
                 return final_answer
 
-            # 执行工具调用
+            # Execute tool call
             tool_name, input_json = self._parse_action(action)
             if not tool_name or input_json is None:
-                # 添加观察结果到历史，让模型继续
-                self.add_message("user", "Observation: 无效的Action格式，请检查。")
+                # Add observation to history for model to continue
+                self.add_message("user", "Observation: Invalid Action format, please check.")
                 continue
 
-            logger.info(f"🎬 行动: {tool_name}[{input_json}]")
+            logger.info(f"🎬 Action: {tool_name}[{input_json}]")
 
-            # 调用工具
+            # Call tool
             observation = self._tool_registry.execute_tool(tool_name, input_json)
-            logger.info(f"👀 观察: {observation}")
+            logger.info(f"👀 Observation: {observation}")
 
-            # 添加观察结果到历史
+            # Add observation to history
             self.add_message("user", f"Observation: {observation}")
 
-        logger.warning("⏰ 已达到最大步数，流程终止。")
-        final_answer = "抱歉，我无法在限定步数内完成这个任务。"
+        logger.warning("Max steps reached, terminating.")
+        final_answer = "Sorry, I could not complete this task within the step limit."
 
-        # 添加最终结果到历史
+        # Add final result to history
         self.add_message("assistant", final_answer)
 
         return final_answer
     
     def _parse_output(self, text: str) -> Tuple[Optional[str], Optional[str]]:
-        """解析LLM输出，提取思考和行动"""
+        """Parse LLM output to extract thought and action"""
         thought_match = _THOUGHT_PATTERN.search(text)
         action_match = _ACTION_PATTERN.search(text)
 
         thought = thought_match.group(1).strip() if thought_match else None
         action = action_match.group(1).strip() if action_match else None
 
-        # 清理可能的前导星号和空格
+        # Clean leading asterisks and spaces
         if thought:
             thought = thought.lstrip("* ").strip()
         if action:
             action = action.lstrip("* ").strip()
 
         return thought, action
-    
+
     def _parse_action(self, action_text: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
-        """解析行动文本，提取工具名称和输入参数
+        """
+        Parse action text to extract tool name and parameters
 
         Args:
-            action_text: 行动文本，格式为 tool_name[json_params]
+            action_text: Action text in format tool_name[json_params]
 
         Returns:
-            Tuple[工具名称, 参数字典]
+            Tuple[tool_name, parameter_dict]
         """
         match = _TOOL_PATTERN.match(action_text)
         if match:
@@ -207,21 +210,21 @@ class ReActAgent(Agent):
             params_str = match.group(2)
 
             try:
-                # 尝试解析JSON格式的参数
+                # Try to parse JSON parameters
                 params = json.loads(params_str)
                 if isinstance(params, dict):
                     return tool_name, params
                 else:
-                    # 如果不是字典，尝试包装成字典
+                    # Wrap non-dict values as "input" parameter
                     return tool_name, {"input": str(params)}
             except (json.JSONDecodeError, ValueError):
-                # 如果JSON解析失败，将整个参数字符串作为input参数
+                # If JSON parsing fails, use entire string as "input" parameter
                 return tool_name, {"input": params_str}
 
         return None, None
 
     def _parse_action_input(self, action_text: str) -> str:
-        """解析行动输入"""
+        """Extract input from Finish action"""
         match = _TOOL_PATTERN.match(action_text)
         return match.group(2) if match else ""
 

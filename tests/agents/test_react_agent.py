@@ -1,15 +1,15 @@
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import logging
 from dotenv import load_dotenv
-from agents.react_agent import ReActAgent
-from core.llm import LLMClient
-from tools.registry import ToolRegistry
-from tools.builtin.search import WebSearch
-from tools.builtin.calculator import CalculatorTool
-from utils.logging import configure_logging
+from hap.agents.react_agent import ReActAgent
+from hap.core.llm import LLMClient
+from hap.tools.registry import ToolRegistry
+from hap.tools.builtin.web_search import WebSearch
+from hap.tools.builtin.bash import BashTool
+from hap.utils.logging import configure_logging
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ def test_react_agent():
         logger.info("正在注册工具...")
         tool_registry = ToolRegistry()
         tool_registry.register_tool(WebSearch())
-        tool_registry.register_tool(CalculatorTool())
+        tool_registry.register_tool(BashTool())
         logger.info("工具注册成功")
 
         logger.info("正在创建 ReActAgent...")

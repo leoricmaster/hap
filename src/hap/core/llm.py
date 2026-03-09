@@ -2,7 +2,7 @@ import os
 import time
 import logging
 from openai import OpenAI
-from typing import Optional, Iterator
+from typing import Optional, Iterator, Dict, List
 from hap.core.exceptions import LLMException, LLMConfigException
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ class LLMClient:
         self._base_url = base_url
         self._client: Optional[OpenAI] = None
 
-    def stream_invoke(self, messages: list[dict[str, str]], **kwargs) -> Iterator[str]:
+    def stream_invoke(self, messages: List[Dict[str, str]], **kwargs) -> Iterator[str]:
         """
         调用大语言模型进行流式响应。使用流式响应以获得更好的用户体验。
 
@@ -111,7 +111,7 @@ class LLMClient:
             logger.error(f"LLM API call failed: {e}")
             raise LLMException(f"LLM call failed: {str(e)}") from e
 
-    def invoke(self, messages: list[dict[str, str]], **kwargs) -> str:
+    def invoke(self, messages: List[Dict[str, str]], **kwargs) -> str:
         """
         非流式调用LLM，返回完整响应。
         适用于不需要流式输出的场景。

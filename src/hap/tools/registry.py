@@ -1,5 +1,8 @@
 from typing import Optional, Any, Dict, List
-from .base import Tool
+import logging
+from hap.tools.base import Tool
+
+logger = logging.getLogger(__name__)
 
 
 class ToolRegistry:
@@ -24,10 +27,10 @@ class ToolRegistry:
             Self for method chaining
         """
         if tool.name in self._tools:
-            print(f"Warning: Tool '{tool.name}' already exists and will be overwritten.")
+            logger.warning(f"Tool '{tool.name}' already exists and will be overwritten.")
 
         self._tools[tool.name] = tool
-        print(f"Tool '{tool.name}' registered.")
+        logger.info(f"Tool '{tool.name}' registered.")
         return self
 
     def register_tools(self, *tools: Tool) -> "ToolRegistry":
@@ -60,10 +63,10 @@ class ToolRegistry:
         """
         if name in self._tools:
             del self._tools[name]
-            print(f"Tool '{name}' unregistered.")
+            logger.info(f"Tool '{name}' unregistered.")
             return True
         else:
-            print(f"Warning: Tool '{name}' does not exist.")
+            logger.warning(f"Tool '{name}' does not exist.")
             return False
 
     def get_tool(self, name: str) -> Optional[Tool]:
@@ -109,7 +112,7 @@ class ToolRegistry:
         descriptions = [tool.get_description() for tool in self._tools.values()]
         return "\n\n".join(descriptions) if descriptions else "No tools available"
 
-    def execute_tool(self, tool_name: str, parameters: Dict[str, Any]) -> str:
+    def execute_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Any:
         """
         Execute a tool by name.
 
@@ -118,7 +121,7 @@ class ToolRegistry:
             parameters: Tool parameters dictionary
 
         Returns:
-            Tool execution result
+            Tool execution result (can be Any type)
         """
         if tool_name not in self._tools:
             return f"Error: Tool '{tool_name}' not found."
@@ -137,7 +140,7 @@ class ToolRegistry:
             Self for method chaining
         """
         self._tools.clear()
-        print("All tools cleared.")
+        logger.info("All tools cleared.")
         return self
 
     def __len__(self) -> int:
