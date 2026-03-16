@@ -1,6 +1,6 @@
 from typing import Optional, List, Dict, Any
-from core.agent import Agent
-from core.llm import LLMClient
+from hap.core.agent import Agent
+from hap.core.llm import LLMClient
 
 # 默认提示词模板
 DEFAULT_PROMPTS = {
@@ -21,7 +21,7 @@ DEFAULT_PROMPTS = {
 {content}
 
 请分析这个回答的质量，指出不足之处，并提出具体的改进建议。
-如果回答已经很好，请回答"无需改进"。
+如果回答已经很好，请明确回答"无需改进"或"NO_IMPROVEMENT_NEEDED"。
 """,
     "refine": """
 请根据反馈意见改进你的回答：
@@ -49,8 +49,9 @@ class Memory:
     def add_record(self, record_type: str, content: str):
         """向记忆中添加一条新记录"""
         self.records.append({"type": record_type, "content": content})
-        # print(f"📝 记忆已更新，新增一条 '{record_type}' 记录。")
-        print(f"📝 记忆已更新，新增一条 '{record_type}' 记录：{content}。")
+        # 只打印类型，避免输出过长内容
+        content_preview = content[:50] + "..." if len(content) > 50 else content
+        print(f"📝 记忆已更新，新增一条 '{record_type}' 记录：{content_preview}")
 
     def get_last_execution(self) -> str:
         """获取最近一次的执行结果"""
@@ -58,6 +59,14 @@ class Memory:
             if record['type'] == 'execution':
                 return record['content']
         return ""
+
+    def clear(self):
+        """清空所有记录"""
+        self.records.clear()
+
+    def get_all_records(self) -> List[Dict[str, Any]]:
+        """获取所有记录的副本"""
+        return self.records.copy()
 
 class ReflectionAgent(Agent):
     """
@@ -89,7 +98,6 @@ class ReflectionAgent(Agent):
             name: Agent名称
             llm: LLM实例
             system_prompt: 系统提示词
-            config: 配置对象
             max_iterations: 最大迭代次数
             custom_prompts: 自定义提示词模板 {"initial": "", "reflect": "", "refine": ""}
         """
@@ -98,7 +106,7 @@ class ReflectionAgent(Agent):
         self.memory = Memory()
 
         # 设置提示词模板：用户自定义优先，否则使用默认模板
-        self.prompts = custom_prompts if custom_prompts else DEFAULT_PROMPTS
+        self.prompts = custom_prompts or DEFAULT_PROMPTS
     
     def run(self, input_text: str, **kwargs) -> str:
         """
@@ -114,7 +122,7 @@ class ReflectionAgent(Agent):
         print(f"\n🤖 {self.name} 开始处理任务: {input_text}")
 
         # 重置记忆
-        self.memory = Memory()
+        self.memory.clear()
 
         # 1. 初始执行
         print("\n--- 正在进行初始尝试 ---")
@@ -136,8 +144,19 @@ class ReflectionAgent(Agent):
             feedback = self._get_llm_response(reflect_prompt, **kwargs)
             self.memory.add_record("reflection", feedback)
 
-            # b. 检查是否需要停止
-            if "无需改进" in feedback or "no need for improvement" in feedback.lower():
+            # b. 检查是否需要停止（多种方式判断）
+            feedback_lower = feedback.lower()
+            stop_signals = [
+                "无需改进",
+                "no need for improvement",
+                "no_improvement_needed",
+                "perfect",
+                "excellent",
+                "已经很好",
+                "非常好",
+                "无需修改"
+            ]
+            if any(signal in feedback_lower for signal in stop_signals):
                 print("\n✅ 反思认为结果已无需改进，任务完成。")
                 break
 
@@ -162,8 +181,13 @@ class ReflectionAgent(Agent):
     
     def _get_llm_response(self, prompt: str, **kwargs) -> str:
         """调用LLM并获取完整响应"""
-        messages = [{"role": "user", "content": prompt}]
+        messages = []
+        # 添加系统提示词（如果存在）
+        if self._system_prompt:
+            messages.append({"role": "system", "content": self._system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
         # 处理生成器响应，将所有内容组合成字符串
-        response_generator = self.llm.think(messages=messages)
+        response_generator = self.llm.think(messages=messages, **kwargs)
         response_text = "".join(chunk for chunk in response_generator) if response_generator else ""
         return response_text
