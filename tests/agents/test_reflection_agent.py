@@ -1,12 +1,12 @@
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import logging
 from dotenv import load_dotenv
-from agents.reflection_agent import ReflectionAgent
-from core.llm import LLMClient
-from utils.logging import configure_logging
+from hap.agents.reflection_agent import ReflectionAgent
+from hap.core.llm import LLMClient
+from hap.utils.logging import configure_logging
 
 configure_logging()
 logger = logging.getLogger(__name__)

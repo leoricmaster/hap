@@ -81,7 +81,7 @@ class LLMClient:
             LLMException: 调用失败
         """
         self._validate_model()
-        logger.info(f"Calling model {self.model}...")
+        logger.info(f"Calling model {self.model} (streaming)...")
 
         def _stream_call():
             client = self._get_client()
@@ -97,13 +97,16 @@ class LLMClient:
         try:
             response = self._call_with_retry(_stream_call)
 
-            logger.info("LLM response received")
+            content_parts = []
             for chunk in response:
                 if not chunk.choices:
                     continue
                 content = chunk.choices[0].delta.content
                 if content:
+                    content_parts.append(content)
                     yield content
+
+            logger.info(f"LLM stream completed, total {len(''.join(content_parts))} chars received")
 
         except LLMException:
             raise

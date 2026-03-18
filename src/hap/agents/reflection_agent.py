@@ -1,13 +1,16 @@
+import logging
 from typing import Optional, List, Dict, Any
+from jinja2 import Template
 from hap.core.agent import Agent
 from hap.core.llm import LLMClient
 
-# 默认提示词模板
+logger = logging.getLogger(__name__)
+
 DEFAULT_PROMPTS = {
     "initial": """
 请根据以下要求完成任务：
 
-任务: {task}
+任务: {{ task }}
 
 请提供一个完整、准确的回答。
 """,
@@ -15,10 +18,10 @@ DEFAULT_PROMPTS = {
 请仔细审查以下回答，并找出可能的问题或改进空间：
 
 # 原始任务:
-{task}
+{{ task }}
 
 # 当前回答:
-{content}
+{{ content }}
 
 请分析这个回答的质量，指出不足之处，并提出具体的改进建议。
 如果回答已经很好，请明确回答"无需改进"或"NO_IMPROVEMENT_NEEDED"。
@@ -27,13 +30,13 @@ DEFAULT_PROMPTS = {
 请根据反馈意见改进你的回答：
 
 # 原始任务:
-{task}
+{{ task }}
 
 # 上一轮回答:
-{last_attempt}
+{{ last_attempt }}
 
 # 反馈意见:
-{feedback}
+{{ feedback }}
 
 请提供一个改进后的回答。
 """
@@ -51,7 +54,7 @@ class Memory:
         self.records.append({"type": record_type, "content": content})
         # 只打印类型，避免输出过长内容
         content_preview = content[:50] + "..." if len(content) > 50 else content
-        print(f"📝 记忆已更新，新增一条 '{record_type}' 记录：{content_preview}")
+        logger.debug("记忆已更新，新增一条 '%s' 记录：%s", record_type, content_preview)
 
     def get_last_execution(self) -> str:
         """获取最近一次的执行结果"""
@@ -64,9 +67,6 @@ class Memory:
         """清空所有记录"""
         self.records.clear()
 
-    def get_all_records(self) -> List[Dict[str, Any]]:
-        """获取所有记录的副本"""
-        return self.records.copy()
 
 class ReflectionAgent(Agent):
     """
@@ -106,7 +106,7 @@ class ReflectionAgent(Agent):
         self.memory = Memory()
 
         # 设置提示词模板：用户自定义优先，否则使用默认模板
-        self.prompts = custom_prompts or DEFAULT_PROMPTS
+        self.prompts = {**DEFAULT_PROMPTS, **(custom_prompts or {})}
     
     def run(self, input_text: str, **kwargs) -> str:
         """
@@ -119,32 +119,31 @@ class ReflectionAgent(Agent):
         Returns:
             最终优化后的结果
         """
-        print(f"\n🤖 {self.name} 开始处理任务: {input_text}")
+        logger.info("🤖 %s 开始处理任务: %s", self._name, input_text)
 
         # 重置记忆
         self.memory.clear()
 
         # 1. 初始执行
-        print("\n--- 正在进行初始尝试 ---")
-        initial_prompt = self.prompts["initial"].format(task=input_text)
-        initial_result = self._get_llm_response(initial_prompt, **kwargs)
-        self.memory.add_record("execution", initial_result)
+        logger.info("--- 正在进行初始尝试 ---")
+        initial_prompt = Template(self.prompts["initial"]).render(task=input_text)
+        current_result = self._get_llm_response(initial_prompt, **kwargs)
+        self.memory.add_record("execution", current_result)
 
         # 2. 迭代循环：反思与优化
         for i in range(self.max_iterations):
-            print(f"\n--- 第 {i+1}/{self.max_iterations} 轮迭代 ---")
+            logger.info("--- 第 %d/%d 轮迭代 ---", i+1, self.max_iterations)
 
             # a. 反思
-            print("\n-> 正在进行反思...")
-            last_result = self.memory.get_last_execution()
-            reflect_prompt = self.prompts["reflect"].format(
+            logger.info("-> 正在进行反思...")
+            reflect_prompt = Template(self.prompts["reflect"]).render(
                 task=input_text,
-                content=last_result
+                content=current_result
             )
             feedback = self._get_llm_response(reflect_prompt, **kwargs)
             self.memory.add_record("reflection", feedback)
 
-            # b. 检查是否需要停止（多种方式判断）
+            # b. 检查是否需要停止
             feedback_lower = feedback.lower()
             stop_signals = [
                 "无需改进",
@@ -157,27 +156,26 @@ class ReflectionAgent(Agent):
                 "无需修改"
             ]
             if any(signal in feedback_lower for signal in stop_signals):
-                print("\n✅ 反思认为结果已无需改进，任务完成。")
+                logger.info("✅ 反思认为结果已无需改进，任务完成。")
                 break
 
             # c. 优化
-            print("\n-> 正在进行优化...")
-            refine_prompt = self.prompts["refine"].format(
+            logger.info("-> 正在进行优化...")
+            refine_prompt = Template(self.prompts["refine"]).render(
                 task=input_text,
-                last_attempt=last_result,
+                last_attempt=current_result,
                 feedback=feedback
             )
-            refined_result = self._get_llm_response(refine_prompt, **kwargs)
-            self.memory.add_record("execution", refined_result)
+            current_result = self._get_llm_response(refine_prompt, **kwargs)
+            self.memory.add_record("execution", current_result)
 
-        final_result = self.memory.get_last_execution()
-        print(f"\n--- 任务完成 ---\n最终结果:\n{final_result}")
+        logger.info("--- 任务完成 ---\n最终结果:\n%s", current_result)
 
         # 保存到历史记录
         self.add_message("user", input_text)
-        self.add_message("assistant", final_result)
+        self.add_message("assistant", current_result)
 
-        return final_result
+        return current_result
     
     def _get_llm_response(self, prompt: str, **kwargs) -> str:
         """调用LLM并获取完整响应"""
@@ -187,7 +185,5 @@ class ReflectionAgent(Agent):
             messages.append({"role": "system", "content": self._system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        # 处理生成器响应，将所有内容组合成字符串
-        response_generator = self.llm.think(messages=messages, **kwargs)
-        response_text = "".join(chunk for chunk in response_generator) if response_generator else ""
-        return response_text
+        # 使用非流式调用，直接获取完整响应
+        return self._llm.invoke(messages=messages, **kwargs)
